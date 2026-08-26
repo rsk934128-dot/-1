@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* ----------------------------------------------------
+   Printer-Friendly CSS Layout for POS / Record Keeping
+   ---------------------------------------------------- */
+@media print {
+  @page {
+    margin: 4mm;
+    size: auto;
+  }
+
+  /* Hide background elements, navigation, modals backdrop, chat widgets */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide all regular web UI elements during receipt print */
+  header, 
+  nav, 
+  footer, 
+  .no-print,
+  #modal-backdrop,
+  .fixed:not(#printable-receipt-area),
+  button:not(.print-include) {
+    display: none !important;
+  }
+
+  /* When printing from printOrderReceipt helper or standalone receipt */
+  #printable-receipt-area {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 6px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    visibility: visible !important;
+  }
+
+  #printable-receipt-area * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+
+  /* Optimize table borders and typography for thermal printing */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border-color: #000000 !important;
+  }
+}

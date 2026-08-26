@@ -1,0 +1,11 @@
+{
+  "name": "হোটেল আল শেখ ফরিদ",
+  "description": "হোটেল আল শেখ ফরিদ (প্রোপাইটার: মো: আব্দুল বারিক শেখ) - স্টেশন এলাকার সেরা ঘরোয়া ও সুস্বাদু খাবারের অনলাইন মেনু, অর্ডার, বিকাশ/নগদ পেমেন্ট, গুগল অ্যাকাউন্ট, Gmail ইনভয়েস ও মেমো, মেসেজিং এবং লাইভ অডিও/ভিডিও কল সাপোর্ট।",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

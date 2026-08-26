@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile with contact info and role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "address": { "type": "string", "description": "Delivery address" },
+        "photoURL": { "type": "string", "description": "Avatar photo URL" },
+        "role": { "type": "string", "enum": ["customer", "admin"], "description": "User access role" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Order": {
+      "title": "Food Order",
+      "description": "Food order record from customers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Order unique ID" },
+        "customerId": { "type": "string", "description": "Auth UID if signed in" },
+        "customerName": { "type": "string", "description": "Customer name" },
+        "customerPhone": { "type": "string", "description": "Customer phone number" },
+        "customerEmail": { "type": "string", "description": "Customer email" },
+        "orderType": { "type": "string", "enum": ["dine_in", "delivery", "parcel"], "description": "Order type" },
+        "tableNumber": { "type": "string", "description": "Table identifier if dine-in" },
+        "deliveryAddress": { "type": "string", "description": "Delivery address if delivery" },
+        "items": { "type": "array", "description": "List of ordered items with portion and quantity" },
+        "total": { "type": "number", "description": "Total amount in BDT" },
+        "paymentMethod": { "type": "string", "description": "bKash, Nagad, Rocket, Cash on delivery" },
+        "paymentStatus": { "type": "string", "enum": ["paid", "pending", "cod"], "description": "Payment status" },
+        "status": { "type": "string", "enum": ["pending", "cooking", "on_the_way", "completed", "cancelled"], "description": "Order status" },
+        "specialNote": { "type": "string", "description": "Special instructions" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "customerName", "customerPhone", "items", "total", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "entity": "UserProfile",
+      "description": "User profile collection with document ID = Auth UID"
+    },
+    "/orders/{orderId}": {
+      "entity": "Order",
+      "description": "All customer food orders"
+    }
+  }
+}
