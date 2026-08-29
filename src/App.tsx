@@ -21,7 +21,9 @@ import {
   MessageCircle,
   WifiOff,
   Database,
-  HardDrive
+  HardDrive,
+  QrCode,
+  Share2
 } from 'lucide-react';
 import { 
   FoodItem, 
@@ -42,6 +44,7 @@ import { HOTEL_INFO, INITIAL_FOOD_ITEMS, INITIAL_USER, INITIAL_ORDERS, INITIAL_R
 import { Header } from './components/Header';
 import { Banner } from './components/Banner';
 import { TodaysSpecialBanner } from './components/TodaysSpecialBanner';
+import { FoodGallery } from './components/FoodGallery';
 import { CustomerReviews } from './components/CustomerReviews';
 import { FoodCard } from './components/FoodCard';
 import { FoodDetailModal } from './components/FoodDetailModal';
@@ -53,6 +56,7 @@ import { ChatDrawer } from './components/ChatDrawer';
 import { EmailModal } from './components/EmailModal';
 import { UserAccountModal } from './components/UserAccountModal';
 import { TableBookingModal } from './components/TableBookingModal';
+import { LoyaltyLeaderboardModal } from './components/LoyaltyLeaderboardModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AiAssistantModal } from './components/AiAssistantModal';
 import { BrowserPushNotificationToast } from './components/BrowserPushNotificationToast';
@@ -63,6 +67,9 @@ import { BkashSmsNotificationBar } from './components/BkashSmsNotificationBar';
 import { BkashSmsLetterModal } from './components/BkashSmsLetterModal';
 import { VoiceCommandListener } from './components/VoiceCommandListener';
 import { OfflineCachedBanner } from './components/OfflineCachedBanner';
+import { PwaInstallBanner } from './components/PwaInstallBanner';
+import { AppShareAndInstallModal } from './components/AppShareAndInstallModal';
+import { SaaSMarketplaceModal } from './components/SaaSMarketplaceModal';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { 
   BkashSmsLetter, 
@@ -139,10 +146,13 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [isTableBookingOpen, setIsTableBookingOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isEmailOpen, setIsEmailOpen] = useState<boolean>(false);
   const [isAiOpen, setIsAiOpen] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [isSaaSMarketplaceOpen, setIsSaaSMarketplaceOpen] = useState<boolean>(false);
   const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
 
   // Call States
@@ -656,6 +666,15 @@ export default function App() {
     }, 50);
   };
 
+  const handleScrollToGallery = () => {
+    setTimeout(() => {
+      const galEl = document.getElementById('food-gallery-section');
+      if (galEl) {
+        galEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  };
+
   // Filter food items
   const filteredFoods = foodItems.filter((item) => {
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
@@ -688,11 +707,15 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenTableBooking={() => setIsTableBookingOpen(true)}
+        onOpenShareAndQr={() => setIsShareModalOpen(true)}
         onStartCall={handleStartCall}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenEmail={() => setIsEmailOpen(true)}
         onOpenAi={() => setIsAiOpen(true)}
+        onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
         onOpenBkashSms={() => handleOpenBkashSmsModal()}
+        onOpenFoodGallery={handleScrollToGallery}
+        onOpenSaaSMarketplace={() => setIsSaaSMarketplaceOpen(true)}
         onToggleVoiceCommand={() => setIsVoiceListening(!isVoiceListening)}
         isVoiceListening={isVoiceListening}
         unreadSmsCount={activeBkashSms && !activeBkashSms.isVerified ? 1 : 0}
@@ -766,11 +789,29 @@ export default function App() {
           onQuickCategory={(cat) => setSelectedCategory(cat as FoodCategory)}
           onStartCall={handleStartCall}
           onOpenTableBooking={() => setIsTableBookingOpen(true)}
+          onOpenShareAndQr={() => setIsShareModalOpen(true)}
+          onOpenFoodGallery={handleScrollToGallery}
+          onOpenSaaSMarketplace={() => setIsSaaSMarketplaceOpen(true)}
           lang={lang}
+        />
+
+        {/* PWA Mobile App Install Bar */}
+        <PwaInstallBanner 
+          lang={lang} 
+          onOpenShareAndQr={() => setIsShareModalOpen(true)} 
         />
 
         {/* Dynamic Today's Special Banner */}
         <TodaysSpecialBanner
+          foodItems={foodItems}
+          onAddToCart={handleAddToCart}
+          onOpenDetails={(food) => setDetailFood(food)}
+          onStartCall={handleStartCall}
+          lang={lang}
+        />
+
+        {/* 8K Food Visual Gallery, Live Kitchen Stream & AI Studio */}
+        <FoodGallery
           foodItems={foodItems}
           onAddToCart={handleAddToCart}
           onOpenDetails={(food) => setDetailFood(food)}
@@ -977,6 +1018,15 @@ export default function App() {
       {/* Floating Action Buttons for Quick Access on Mobile */}
       <div className="fixed bottom-4 left-4 right-4 z-40 sm:hidden flex items-center justify-between gap-1.5 bg-stone-900/90 backdrop-blur-md p-2 rounded-2xl border border-stone-700 shadow-xl">
         <button
+          onClick={() => setIsShareModalOpen(true)}
+          className="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 text-[11px] font-bold flex items-center justify-center gap-1 shadow-xs"
+          title="QR ও শেয়ার"
+        >
+          <QrCode className="w-3.5 h-3.5 text-stone-950" />
+          <span>QR</span>
+        </button>
+
+        <button
           onClick={() => openDirectWhatsApp(undefined, user, lang)}
           className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center gap-1 shadow-xs"
           title="WhatsApp"
@@ -1014,9 +1064,13 @@ export default function App() {
       <footer className="bg-stone-900 text-stone-400 text-xs border-t border-stone-800 pt-12 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold">
-                <Store className="w-5 h-5" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border border-amber-400/60 bg-stone-950 flex items-center justify-center shrink-0 shadow-md">
+                <img 
+                  src="/icon.svg" 
+                  alt="Hotel Al Sheikh Farid Logo" 
+                  className="w-full h-full object-cover" 
+                />
               </div>
               <h4 className="text-base font-bold font-serif text-white">{HOTEL_INFO.nameBn}</h4>
             </div>
@@ -1076,7 +1130,7 @@ export default function App() {
             <p className="text-xs text-stone-400 mb-3">
               বিকাশ, নগদ, রকেট ও ক্যাশ অন ডেলিভারির মাধ্যমে সহজ পেমেন্ট।
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-4">
               <span className="px-2 py-1 bg-pink-900/60 border border-pink-700/50 text-pink-300 rounded font-bold text-[10px]">
                 bKash
               </span>
@@ -1090,6 +1144,15 @@ export default function App() {
                 Cash
               </span>
             </div>
+
+            {/* Direct App QR & Media Share Button in Footer */}
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-500/30 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <QrCode className="w-4 h-4 text-amber-400" />
+              <span>{lang === 'bn' ? '📲 অ্যাপ শেয়ার ও QR কোড' : '📲 Share App & QR Code'}</span>
+            </button>
           </div>
         </div>
 
@@ -1199,6 +1262,10 @@ export default function App() {
           setIsAccountOpen(false);
           setIsTableBookingOpen(true);
         }}
+        onOpenLeaderboard={() => {
+          setIsAccountOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
         onUpdateProfile={handleUpdateProfile}
         onReOrder={handleReOrder}
         onAddToCart={handleAddToCart}
@@ -1215,6 +1282,23 @@ export default function App() {
         onSignOut={handleSignOut}
         isGoogleSignedIn={isGoogleSignedIn}
         authLoading={authLoading}
+      />
+
+      {/* Loyalty Leaderboard Modal */}
+      <LoyaltyLeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        user={user}
+        lang={lang}
+        onOrderNowClick={() => {
+          setIsLeaderboardOpen(false);
+          const menuSection = document.getElementById('menu-section') || document.querySelector('main');
+          menuSection?.scrollIntoView({ behavior: 'smooth' });
+        }}
+        onOpenAccountPass={() => {
+          setIsLeaderboardOpen(false);
+          setIsAccountOpen(true);
+        }}
       />
 
       {/* Table Booking & Seat Reservation Modal */}
@@ -1289,6 +1373,7 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenTableBooking={() => setIsTableBookingOpen(true)}
+        onOpenShareAndQr={() => setIsShareModalOpen(true)}
         onStartCall={handleStartCall}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenEmail={() => setIsEmailOpen(true)}
@@ -1301,6 +1386,20 @@ export default function App() {
         lang={lang}
         isListeningExternal={isVoiceListening}
         onListeningChange={(listening) => setIsVoiceListening(listening)}
+      />
+
+      {/* App Media Share & QR Code Installation Modal */}
+      <AppShareAndInstallModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        lang={lang}
+      />
+
+      {/* SaaS Marketplace & White-Label Commercial Sales Portal Modal */}
+      <SaaSMarketplaceModal
+        isOpen={isSaaSMarketplaceOpen}
+        onClose={() => setIsSaaSMarketplaceOpen(false)}
+        lang={lang}
       />
     </div>
   );

@@ -1,16 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="bn">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    
+    <!-- Primary App Identity & Meta -->
     <title>হোটেল আল শেখ ফরিদ - অনলাইন খাবার অর্ডার ও ডেলিভারি | প্রোপাইটার: মো: আব্দুল বারিক শেখ</title>
-    <meta name="description" content="হোটেল আল শেখ ফরিদ (প্রোপাইটার: মো: আব্দুল বারিক শেখ) - স্টেশন এলাকার সেরা ঘরোয়া ও সুস্বাদু খাবারের অনলাইন মেনু ও অর্ডার সিস্টেম।" />
+    <meta name="description" content="হোটেল আল শেখ ফরিদ (প্রোপাইটার: মো: আব্দুল বারিক শেখ) - স্টেশন এলাকার সেরা ঘরোয়া ও সুস্বাদু খাবারের অনলাইন মেনু, অর্ডার, বিকাশ/নগদ পেমেন্ট ও টেবিল বুকিং।" />
+    
+    <!-- Browser Favicons & Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="shortcut icon" href="/favicon.png" />
+    
+    <!-- iOS Safari "Add to Home Screen" & Mobile App Support -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="আল শেখ ফরিদ" />
+    
+    <!-- Android PWA & Chrome Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="হোটেল আল শেখ ফরিদ" />
+    <meta name="theme-color" content="#b45309" />
+    <meta name="msapplication-TileColor" content="#1c1917" />
+
+    <!-- Open Graph / Social Media Preview (Facebook, WhatsApp, Messenger) -->
     <meta property="og:title" content="হোটেল আল শেখ ফরিদ - অনলাইন খাবার অর্ডার ও ডেলিভারি" />
-    <meta property="og:description" content="হোটেল আল শেখ ফরিদ - গরম জিলাপি, ভুনা খিচুড়ি, কষা গরুর মাংস ও তাজা মাছ।" />
+    <meta property="og:description" content="রেলওয়ে স্টেশন এলাকার সেরা ঘরোয়া ও তাজা খাবার। গরম জিলাপি, ভুনা খিচুড়ি, কষা গরুর মাংস ও তাজা মাছ।" />
+    <meta property="og:image" content="/og-image.png" />
     <meta property="og:type" content="website" />
+    
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="হোটেল আল শেখ ফরিদ" />
+    <meta name="twitter:description" content="রেলওয়ে স্টেশন মেইন গেট সংলগ্ন সেরা ঘরোয়া খাবার ও হোম ডেলিভারি।" />
+    <meta name="twitter:image" content="/og-image.png" />
   </head>
-  <body>
+  <body class="bg-stone-900 text-stone-100 antialiased selection:bg-amber-500 selection:text-stone-950">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

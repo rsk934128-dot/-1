@@ -21,7 +21,9 @@ import {
   RotateCcw,
   Zap,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  QrCode,
+  Share2
 } from 'lucide-react';
 import { FoodCategory } from '../types';
 
@@ -29,6 +31,7 @@ export interface VoiceCommandListenerProps {
   onOpenCart: () => void;
   onOpenAccount: () => void;
   onOpenTableBooking?: () => void;
+  onOpenShareAndQr?: () => void;
   onStartCall: (type: 'audio' | 'video') => void;
   onOpenChat: () => void;
   onOpenEmail: () => void;
@@ -59,6 +62,7 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
   onOpenCart,
   onOpenAccount,
   onOpenTableBooking,
+  onOpenShareAndQr,
   onStartCall,
   onOpenChat,
   onOpenEmail,
@@ -338,6 +342,19 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
       },
       confirmVoiceBn: 'বিকাশ এসএমএস লেটার খোলা হয়েছে',
       confirmVoiceEn: 'Opening bKash SMS Letters',
+    },
+    {
+      id: 'open_share_qr',
+      icon: <QrCode className="w-4 h-4 text-amber-500" />,
+      labelBn: 'অ্যাপ শেয়ার ও কিউআর কোড',
+      labelEn: 'Share App & QR Code',
+      keywordsBn: ['শেয়ার', 'অ্যাপ শেয়ার', 'কিউআর কোড', 'কিউআর', 'শেয়ার করুন', 'ইন্সটল কিউআর', 'মিডিয়া শেয়ার', 'কিউ আর'],
+      keywordsEn: ['share app', 'share', 'qr code', 'qr', 'scan qr', 'install app', 'social share'],
+      action: () => {
+        if (onOpenShareAndQr) onOpenShareAndQr();
+      },
+      confirmVoiceBn: 'অ্যাপ শেয়ার এবং কিউআর কোড খোলা হয়েছে',
+      confirmVoiceEn: 'Opening App Share and QR code',
     },
     {
       id: 'toggle_language',

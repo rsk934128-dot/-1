@@ -55,6 +55,25 @@ export interface PointsHistoryItem {
 
 export type LoyaltyTier = 'bronze' | 'silver' | 'gold' | 'platinum';
 
+export interface LeaderboardCustomer {
+  id: string;
+  rank: number;
+  name: string;
+  phoneMasked: string;
+  avatar?: string;
+  points: number;
+  ordersCount: number;
+  tier: LoyaltyTier;
+  favoriteFoodBn: string;
+  favoriteFoodEn: string;
+  isCurrentUser?: boolean;
+  badgeBn?: string;
+  badgeEn?: string;
+  rewardBn?: string;
+  rewardEn?: string;
+  streakDays?: number;
+}
+
 export interface Order {
   id: string;
   items: CartItem[];

@@ -17,7 +17,13 @@ import {
   Mic,
   WifiOff,
   Database,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Trophy,
+  QrCode,
+  Share2,
+  Camera,
+  Crown,
+  Laptop
 } from 'lucide-react';
 import { HOTEL_INFO } from '../data/initialData';
 import { UserProfile } from '../types';
@@ -27,11 +33,15 @@ interface HeaderProps {
   onOpenCart: () => void;
   onOpenAccount: () => void;
   onOpenTableBooking?: () => void;
+  onOpenShareAndQr?: () => void;
+  onOpenSaaSMarketplace?: () => void;
   onStartCall: (type: 'audio' | 'video') => void;
   onOpenChat: () => void;
   onOpenEmail: () => void;
   onOpenAi: () => void;
+  onOpenLeaderboard?: () => void;
   onOpenBkashSms?: () => void;
+  onOpenFoodGallery?: () => void;
   onToggleVoiceCommand?: () => void;
   isVoiceListening?: boolean;
   unreadSmsCount?: number;
@@ -51,11 +61,15 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCart,
   onOpenAccount,
   onOpenTableBooking,
+  onOpenShareAndQr,
+  onOpenSaaSMarketplace,
   onStartCall,
   onOpenChat,
   onOpenEmail,
   onOpenAi,
+  onOpenLeaderboard,
   onOpenBkashSms,
+  onOpenFoodGallery,
   onToggleVoiceCommand,
   isVoiceListening = false,
   unreadSmsCount = 0,
@@ -128,8 +142,12 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-18 gap-2">
           {/* Logo & Hotel Title */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20 border-2 border-amber-200">
-              <Store className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-xl overflow-hidden shadow-md shadow-amber-500/20 border-2 border-amber-300 bg-stone-900 flex items-center justify-center shrink-0">
+              <img 
+                src="/icon.svg" 
+                alt="Hotel Al Sheikh Farid Logo" 
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -219,6 +237,50 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <UtensilsCrossed className="w-3.5 h-3.5 text-amber-700" />
                 <span>{lang === 'bn' ? 'টেবিল বুকিং' : 'Book Table'}</span>
+              </button>
+            )}
+
+            {onOpenLeaderboard && (
+              <button
+                onClick={onOpenLeaderboard}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-600 hover:to-yellow-600 text-stone-950 shadow-xs transition-all cursor-pointer ring-1 ring-amber-400"
+                title="লয়ালটি লিডারবোর্ড - শীর্ষ ৫ নিয়মিত কাস্টমার"
+              >
+                <Trophy className="w-3.5 h-3.5 text-stone-950 animate-bounce" />
+                <span>{lang === 'bn' ? '🏆 লিডারবোর্ড' : '🏆 Leaderboard'}</span>
+              </button>
+            )}
+
+            {onOpenFoodGallery && (
+              <button
+                onClick={onOpenFoodGallery}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:from-amber-500 hover:to-orange-500 shadow-xs transition-all cursor-pointer ring-1 ring-amber-400"
+                title="৮K ফুড গ্যালালি ও লাইভ ভিডিও সেল"
+              >
+                <Camera className="w-3.5 h-3.5 text-amber-200" />
+                <span>{lang === 'bn' ? '📸 ৮K গ্যালালি' : '📸 8K Gallery'}</span>
+              </button>
+            )}
+
+            {onOpenSaaSMarketplace && (
+              <button
+                onClick={onOpenSaaSMarketplace}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md transition-all cursor-pointer ring-1 ring-emerald-300 animate-pulse"
+                title="আপনার রেস্তোরাঁর জন্য SaaS সফটওয়্যার কিনুন"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-300" />
+                <span>{lang === 'bn' ? '💼 SaaS কিনুন' : '💼 Buy SaaS'}</span>
+              </button>
+            )}
+
+            {onOpenShareAndQr && (
+              <button
+                onClick={onOpenShareAndQr}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-stone-900 hover:bg-stone-800 text-amber-300 border border-amber-500/40 shadow-xs transition-all cursor-pointer"
+                title="অ্যাপ শেয়ার ও কিউআর কোড স্ক্যানার"
+              >
+                <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                <span>{lang === 'bn' ? '📲 অ্যাপ শেয়ার ও QR' : '📲 Share & QR'}</span>
               </button>
             )}
 
@@ -382,6 +444,58 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <UtensilsCrossed className="w-4 h-4 text-amber-700" />
                 <span>{lang === 'bn' ? 'টেবিল বুকিং' : 'Table Booking'}</span>
+              </button>
+            )}
+
+            {onOpenLeaderboard && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenLeaderboard();
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-stone-950 text-xs font-black shadow-xs"
+              >
+                <Trophy className="w-4 h-4 text-stone-950" />
+                <span>{lang === 'bn' ? '🏆 লিডারবোর্ড' : '🏆 Leaderboard'}</span>
+              </button>
+            )}
+
+            {onOpenFoodGallery && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenFoodGallery();
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs font-black shadow-xs"
+              >
+                <Camera className="w-4 h-4 text-amber-200" />
+                <span>{lang === 'bn' ? '📸 ৮K গ্যালালি' : '📸 8K Gallery'}</span>
+              </button>
+            )}
+
+            {onOpenSaaSMarketplace && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenSaaSMarketplace();
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black shadow-xs ring-1 ring-emerald-300"
+              >
+                <Crown className="w-4 h-4 text-amber-300" />
+                <span>{lang === 'bn' ? '💼 SaaS হিসেবে কিনুন' : '💼 Buy SaaS Suite'}</span>
+              </button>
+            )}
+
+            {onOpenShareAndQr && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenShareAndQr();
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-stone-900 border border-amber-500/50 text-amber-300 text-xs font-bold shadow-xs"
+              >
+                <QrCode className="w-4 h-4 text-amber-400" />
+                <span>{lang === 'bn' ? '📲 অ্যাপ শেয়ার ও QR' : '📲 Share & QR'}</span>
               </button>
             )}
 

@@ -107,6 +107,18 @@ export const getWhatsAppUrl = (
 };
 
 /**
+ * Trigger opening WhatsApp with a custom phone and custom text
+ */
+export const openDirectCustomWhatsApp = (
+  phone: string,
+  message: string
+): void => {
+  const formattedPhone = getWhatsAppFormattedNumber(phone);
+  const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
+/**
  * Trigger opening WhatsApp in a new browser tab/window
  */
 export const openDirectWhatsApp = (

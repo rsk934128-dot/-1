@@ -1,15 +1,26 @@
 import React from 'react';
-import { Sparkles, Utensils, Zap, Award, Flame, PhoneCall, ShoppingBag, UtensilsCrossed } from 'lucide-react';
+import { Sparkles, Utensils, Zap, Award, Flame, PhoneCall, ShoppingBag, UtensilsCrossed, QrCode, Share2, Camera, Crown } from 'lucide-react';
 import { HOTEL_INFO } from '../data/initialData';
 
 interface BannerProps {
   onQuickCategory: (category: string) => void;
   onStartCall: (type: 'audio' | 'video') => void;
   onOpenTableBooking?: () => void;
+  onOpenShareAndQr?: () => void;
+  onOpenFoodGallery?: () => void;
+  onOpenSaaSMarketplace?: () => void;
   lang: 'bn' | 'en';
 }
 
-export const Banner: React.FC<BannerProps> = ({ onQuickCategory, onStartCall, onOpenTableBooking, lang }) => {
+export const Banner: React.FC<BannerProps> = ({ 
+  onQuickCategory, 
+  onStartCall, 
+  onOpenTableBooking, 
+  onOpenShareAndQr, 
+  onOpenFoodGallery, 
+  onOpenSaaSMarketplace,
+  lang 
+}) => {
   return (
     <div className="relative overflow-hidden bg-stone-900 text-white rounded-3xl mx-4 sm:mx-6 lg:mx-8 my-6 shadow-xl border border-amber-500/20">
       {/* Background Image with Dark Vignette Overlay */}
@@ -118,6 +129,26 @@ export const Banner: React.FC<BannerProps> = ({ onQuickCategory, onStartCall, on
             <span>{lang === 'bn' ? 'মাছ-মাংস ও দুপুরের খাবার' : 'Fish & Meat Menu'}</span>
           </button>
 
+          {onOpenFoodGallery && (
+            <button
+              onClick={onOpenFoodGallery}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-sm border border-amber-400/50 shadow-md transition-all cursor-pointer"
+            >
+              <Camera className="w-4 h-4 text-amber-200" />
+              <span>{lang === 'bn' ? '📸 ৮K ফুড গ্যালারি ও লাইভ কিচেন' : '📸 8K Food Gallery & Live Kitchen'}</span>
+            </button>
+          )}
+
+          {onOpenSaaSMarketplace && (
+            <button
+              onClick={onOpenSaaSMarketplace}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm border border-emerald-300/60 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer ring-2 ring-emerald-400/40"
+            >
+              <Crown className="w-4 h-4 text-amber-300 animate-pulse" />
+              <span>{lang === 'bn' ? '💼 এই অ্যাপটি আপনার হোটেলের জন্য কিনুন (SaaS)' : '💼 Buy this App for Your Restaurant (SaaS)'}</span>
+            </button>
+          )}
+
           {onOpenTableBooking && (
             <button
               onClick={onOpenTableBooking}
@@ -125,6 +156,16 @@ export const Banner: React.FC<BannerProps> = ({ onQuickCategory, onStartCall, on
             >
               <UtensilsCrossed className="w-4 h-4 text-amber-200" />
               <span>{lang === 'bn' ? 'সিট / টেবিল বুকিং' : 'Book Table'}</span>
+            </button>
+          )}
+
+          {onOpenShareAndQr && (
+            <button
+              onClick={onOpenShareAndQr}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-600/90 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-white font-bold text-sm border border-amber-400/50 shadow-md transition-all cursor-pointer"
+            >
+              <QrCode className="w-4 h-4 text-amber-200" />
+              <span>{lang === 'bn' ? 'কিউআর স্ক্যান ও মিডিয়া শেয়ার' : 'QR Scan & Share'}</span>
             </button>
           )}
 

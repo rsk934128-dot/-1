@@ -37,7 +37,12 @@ import {
   Bell,
   Volume2,
   VolumeX,
-  Volume1
+  Volume1,
+  Crown,
+  Globe,
+  Key,
+  Laptop,
+  X
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -58,6 +63,8 @@ import {
 } from 'recharts';
 import { FoodItem, Order, OrderStatus, SUPER_ADMIN_EMAILS } from '../types';
 import { HOTEL_INFO } from '../data/initialData';
+import { INITIAL_SAAS_TENANTS, SaaSTenant, SAAS_PLANS, SaaSOrderRequest } from '../data/saasPlans';
+import { openDirectCustomWhatsApp } from '../utils/whatsappHelper';
 import { CategoryOrderDistributionD3Chart } from './CategoryOrderDistributionD3Chart';
 import { printOrderReceipt } from '../utils/printReceiptHelper';
 import { PrintableOrderReceipt } from './PrintableOrderReceipt';
@@ -95,7 +102,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onCloseAdmin,
   lang,
 }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'webrtc' | 'menu' | 'stats'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'webrtc' | 'menu' | 'stats' | 'saas'>('orders');
   const [chartView, setChartView] = useState<'weekly' | 'category_stock' | 'hourly' | 'payment'>('weekly');
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [editPriceVal, setEditPriceVal] = useState<number>(0);
@@ -104,6 +111,105 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [soundMuted, setSoundMuted] = useState<boolean>(SoundNotificationService.isMuted());
   const [soundVolume, setSoundVolume] = useState<number>(SoundNotificationService.getVolume());
   const [lastTestedSound, setLastTestedSound] = useState<string | null>(null);
+
+  // SaaS Tenants & Leads State
+  const [saasTenants, setSaasTenants] = useState<SaaSTenant[]>(() => {
+    try {
+      const saved = localStorage.getItem('hotel_saas_tenants_admin');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_SAAS_TENANTS;
+  });
+
+  const [leadRequests, setLeadRequests] = useState<SaaSOrderRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem('hotel_saas_lead_orders');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  const [newTenantForm, setNewTenantForm] = useState({
+    restaurantName: '',
+    ownerName: '',
+    phone: '',
+    email: '',
+    location: '',
+    planId: 'pro' as 'starter' | 'pro' | 'enterprise',
+    billingCycle: 'yearly' as 'monthly' | 'yearly' | 'lifetime',
+    domainUrl: '',
+    brandColor: '#d97706'
+  });
+  const [showAddTenantModal, setShowAddTenantModal] = useState<boolean>(false);
+
+  const handleAddNewTenant = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTenantForm.restaurantName || !newTenantForm.ownerName || !newTenantForm.phone) {
+      alert(lang === 'bn' ? 'অনুগ্রহ করে আবশ্যকীয় তথ্য পূরণ করুন' : 'Please fill required fields');
+      return;
+    }
+
+    const randomId = `ALSK-${newTenantForm.planId.toUpperCase().slice(0, 3)}-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newTenant: SaaSTenant = {
+      id: `tenant-${Date.now()}`,
+      restaurantName: newTenantForm.restaurantName,
+      ownerName: newTenantForm.ownerName,
+      phone: newTenantForm.phone,
+      email: newTenantForm.email,
+      location: newTenantForm.location || 'বাংলাদেশ',
+      planId: newTenantForm.planId,
+      status: 'active',
+      billingCycle: newTenantForm.billingCycle,
+      licenseKey: randomId,
+      domainUrl: newTenantForm.domainUrl || `https://${newTenantForm.restaurantName.toLowerCase().replace(/[^a-z0-9]/g, '')}.ordernow.live`,
+      totalOrdersProcessed: 0,
+      startDate: new Date().toISOString().split('T')[0],
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      brandColor: newTenantForm.brandColor
+    };
+
+    const updated = [newTenant, ...saasTenants];
+    setSaasTenants(updated);
+    try {
+      localStorage.setItem('hotel_saas_tenants_admin', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+
+    setShowAddTenantModal(false);
+    setNewTenantForm({
+      restaurantName: '',
+      ownerName: '',
+      phone: '',
+      email: '',
+      location: '',
+      planId: 'pro',
+      billingCycle: 'yearly',
+      domainUrl: '',
+      brandColor: '#d97706'
+    });
+  };
+
+  const handleToggleTenantStatus = (tenantId: string) => {
+    const updated = saasTenants.map(t => {
+      if (t.id === tenantId) {
+        const nextStatus: 'active' | 'trial' | 'pending' | 'expired' = 
+          t.status === 'active' ? 'expired' : 'active';
+        return { ...t, status: nextStatus };
+      }
+      return t;
+    });
+    setSaasTenants(updated);
+    try {
+      localStorage.setItem('hotel_saas_tenants_admin', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   React.useEffect(() => {
     const unsub = SoundNotificationService.subscribe(({ volume, muted }) => {
@@ -377,6 +483,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }`}
             >
               {lang === 'bn' ? 'বিক্রি ও হিসাব' : 'Sales Stats'}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('saas')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'saas' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-stone-950 shadow-xs font-black' : 'text-emerald-400 hover:text-emerald-300'
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-300" />
+              <span>{lang === 'bn' ? `SaaS টেন্যান্ট ও লাইসেন্স (${saasTenants.length})` : `SaaS Tenants (${saasTenants.length})`}</span>
             </button>
           </div>
 
@@ -1403,6 +1519,307 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               মালিক: মো: আব্দুল বারিক শেখ • {currentAdminEmail}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* TAB 5: SAAS TENANTS & COMMERCIAL LICENSES */}
+      {activeTab === 'saas' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* SaaS Header Summary */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-stone-950 via-emerald-950/70 to-stone-900 border border-emerald-500/30 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-xs font-black uppercase flex items-center gap-1">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  SaaS Master License Controller
+                </span>
+                <span className="text-xs text-stone-400">
+                  মোট অ্যাক্টিভ ক্লায়েন্ট: {saasTenants.filter(t => t.status === 'active').length} টি
+                </span>
+              </div>
+              <h3 className="text-2xl font-black font-serif text-white mt-1">
+                হোয়াইট-লেবেল রেস্তোরাঁ ক্লায়েন্ট ও সাবস্ক্রিপশন ব্যবস্থাপনা
+              </h3>
+              <p className="text-xs text-stone-300 max-w-2xl mt-1">
+                এই প্ল্যাটফর্মটি অন্যান্য রেস্তোরাঁ ও হোটেলের কাছে SaaS সাবস্ক্রিপশন হিসেবে বিক্রি করুন। নতুন লাইসেন্স ইস্যু, ডোমেইন কনফিগারেশন ও ক্লায়েন্ট রিনিউয়াল কন্ট্রোল করুন।
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                onClick={() => setShowAddTenantModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-stone-950 font-black text-xs flex items-center gap-2 hover:from-emerald-400 hover:to-teal-400 shadow-md cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>নতুন ক্লায়েন্ট / টেন্যান্ট যোগ করুন</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Incoming Online Leads & Bookings Section */}
+          {leadRequests.length > 0 && (
+            <div className="p-5 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-amber-200 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>নতুন অনলাইন বুকিং রিকুয়েস্ট ({leadRequests.length} টি)</span>
+                </h4>
+                <span className="text-xs text-amber-300">ওয়েবসাইট থেকে আসা ক্রেতার আবেদন</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {leadRequests.map((req) => (
+                  <div key={req.id} className="p-4 rounded-xl bg-stone-900 border border-amber-500/30 text-xs space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-white text-sm">{req.restaurantName}</div>
+                        <div className="text-stone-400">মালিক: {req.ownerName} • {req.district}</div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-amber-500 text-stone-950 font-black text-[10px]">
+                        {req.planId.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between text-stone-300 font-mono text-[11px] pt-1 border-t border-stone-800">
+                      <span>টাকা: ৳{req.priceBDT.toLocaleString()} ({req.paymentMethod.toUpperCase()})</span>
+                      <span>Trx: {req.transactionId}</span>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => openDirectCustomWhatsApp(req.phone, `আসসালামু আলাইকুম ${req.ownerName} সাহেব, আপনার ${req.restaurantName} রেস্তোরাঁর জন্য SaaS সফটওয়্যার বুকিং (${req.id}) গৃহিত হয়েছে।`)}
+                        className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center justify-center gap-1"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>হোয়াটসঅ্যাপে যোগাযোগ</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Active Tenants List */}
+          <div className="p-6 rounded-3xl bg-stone-900 border border-stone-800 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="text-lg font-bold text-white font-serif flex items-center gap-2">
+                  <Store className="w-5 h-5 text-amber-400" />
+                  <span>লাইভ সাবস্ক্রাইবার ও টেন্যান্ট তালিকা</span>
+                </h4>
+                <p className="text-xs text-stone-400">সিস্টেমে চালু থাকা রেস্তোরাঁ ও তাদের লাইসেন্স ভ্যালিডিটি।</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-stone-300 border-collapse">
+                <thead>
+                  <tr className="border-b border-stone-800 text-stone-400 font-semibold uppercase text-[11px]">
+                    <th className="py-3 px-3">রেস্তোরাঁ ও মালিক</th>
+                    <th className="py-3 px-3">প্যাকেজ ও বিলিং</th>
+                    <th className="py-3 px-3">লাইসেন্স কি (License Key)</th>
+                    <th className="py-3 px-3">ডোমেইন / লিঙ্ক</th>
+                    <th className="py-3 px-3">মোট অর্ডার</th>
+                    <th className="py-3 px-3">স্ট্যাটাস</th>
+                    <th className="py-3 px-3 text-right">অ্যাকশন</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-800/60 font-sans">
+                  {saasTenants.map((tenant) => (
+                    <tr key={tenant.id} className="hover:bg-stone-800/40 transition-colors">
+                      <td className="py-3.5 px-3">
+                        <div className="font-bold text-white text-sm">{tenant.restaurantName}</div>
+                        <div className="text-stone-400 text-[11px]">
+                          {tenant.ownerName} • <span className="font-mono text-amber-400">{tenant.phone}</span>
+                        </div>
+                        <div className="text-stone-500 text-[10px]">{tenant.location}</div>
+                      </td>
+
+                      <td className="py-3.5 px-3">
+                        <span className="px-2 py-0.5 rounded-md font-bold text-[10px] uppercase bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                          {tenant.planId}
+                        </span>
+                        <div className="text-[10px] text-stone-400 mt-1 capitalize">
+                          সাইকেল: {tenant.billingCycle}
+                        </div>
+                        <div className="text-[10px] text-stone-500">
+                          মেয়াদ: {tenant.expiryDate}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-3 font-mono text-[11px] text-emerald-400">
+                        <div className="p-1.5 rounded-lg bg-stone-950 border border-stone-800 inline-block font-bold">
+                          {tenant.licenseKey}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-3">
+                        <a 
+                          href={tenant.domainUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-blue-400 hover:underline flex items-center gap-1 font-mono text-[11px]"
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[150px]">{tenant.domainUrl.replace('https://', '')}</span>
+                        </a>
+                      </td>
+
+                      <td className="py-3.5 px-3 font-mono font-bold text-white">
+                        {tenant.totalOrdersProcessed.toLocaleString()} টি
+                      </td>
+
+                      <td className="py-3.5 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          tenant.status === 'active' 
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                            : 'bg-red-500/20 text-red-300 border border-red-400/40'
+                        }`}>
+                          {tenant.status}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openDirectCustomWhatsApp(tenant.phone, `আসসালামু আলাইকুম ${tenant.ownerName} সাহেব, আপনার ${tenant.restaurantName} এর জন্য সিস্টেম আপডেট সম্পন্ন হয়েছে।`)}
+                            className="p-1.5 rounded-lg bg-emerald-700/60 hover:bg-emerald-600 text-white transition-all"
+                            title="হোয়াটসঅ্যাপ মেসেজ"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => handleToggleTenantStatus(tenant.id)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                              tenant.status === 'active'
+                                ? 'bg-red-900/60 hover:bg-red-800 text-red-200 border border-red-700'
+                                : 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700'
+                            }`}
+                          >
+                            {tenant.status === 'active' ? 'সাসপেন্ড' : 'অ্যাক্টিভেট'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Modal for Adding New Tenant */}
+          {showAddTenantModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-stone-900 border border-stone-700 text-white rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b border-stone-800 pb-3">
+                  <h4 className="text-base font-black text-amber-400 flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    <span>নতুন SaaS ক্লায়েন্ট অনবোর্ড করুন</span>
+                  </h4>
+                  <button onClick={() => setShowAddTenantModal(false)} className="text-stone-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddNewTenant} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-stone-300 font-bold mb-1">রেস্তোরাঁর নাম *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newTenantForm.restaurantName}
+                      onChange={(e) => setNewTenantForm({ ...newTenantForm, restaurantName: e.target.value })}
+                      placeholder="যেমন: কাচ্চি ডাইন"
+                      className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">মালিকের নাম *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newTenantForm.ownerName}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerName: e.target.value })}
+                        placeholder="মালিকের নাম"
+                        className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">মোবাইল নম্বর *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={newTenantForm.phone}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, phone: e.target.value })}
+                        placeholder="017XXXXXXXX"
+                        className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">প্যাকেজ</label>
+                      <select
+                        value={newTenantForm.planId}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, planId: e.target.value as any })}
+                        className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none"
+                      >
+                        <option value="starter">Starter Cloud (৳১,৯৯৯/ম)</option>
+                        <option value="pro">Pro Suite (৳৪,৯৯৯/ম)</option>
+                        <option value="enterprise">Enterprise (৳১২,৯৯৯/ম)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">বিলিং সাইকেল</label>
+                      <select
+                        value={newTenantForm.billingCycle}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, billingCycle: e.target.value as any })}
+                        className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none"
+                      >
+                        <option value="monthly">মাসিক (Monthly)</option>
+                        <option value="yearly">বাৎসরিক (Yearly)</option>
+                        <option value="lifetime">লাইফটাইম (Lifetime)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-300 font-bold mb-1">অবস্থান / জেলা</label>
+                    <input
+                      type="text"
+                      value={newTenantForm.location}
+                      onChange={(e) => setNewTenantForm({ ...newTenantForm, location: e.target.value })}
+                      placeholder="যেমন: ঈশ্বরদী, পাবনা"
+                      className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddTenantModal(false)}
+                      className="px-4 py-2 rounded-xl bg-stone-800 text-stone-300 text-xs font-bold"
+                    >
+                      বাতিল
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-black text-xs flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>লাইসেন্স ইস্যু ও সেভ করুন</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

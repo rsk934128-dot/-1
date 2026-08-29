@@ -49,10 +49,12 @@ import {
   Copy,
   CheckCheck,
   Smartphone,
-  Maximize2
+  Maximize2,
+  Trophy
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
+import { LoyaltyQRCode } from './LoyaltyQRCode';
 import {
   ResponsiveContainer,
   LineChart,
@@ -79,6 +81,7 @@ interface UserAccountModalProps {
   reservations?: TableReservation[];
   onCancelReservation?: (id: string) => void;
   onOpenTableBooking?: () => void;
+  onOpenLeaderboard?: () => void;
   onUpdateProfile: (updated: Partial<UserProfile>) => void;
   onReOrder: (order: Order) => void;
   onAddToCart?: (item: CartItem) => void;
@@ -121,6 +124,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
   reservations = [],
   onCancelReservation,
   onOpenTableBooking,
+  onOpenLeaderboard,
   onUpdateProfile,
   onReOrder,
   onAddToCart,
@@ -154,41 +158,6 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
   const [addedItemKeys, setAddedItemKeys] = useState<{ [key: string]: boolean }>({});
   const [itemQuantities, setItemQuantities] = useState<{ [key: string]: number }>({});
   const [addAllSuccess, setAddAllSuccess] = useState<boolean>(false);
-
-  // Unique User QR Code State
-  const userUid = user.uid || user.id || 'CUST-84920';
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
-  const [copiedUid, setCopiedUid] = useState<boolean>(false);
-  const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
-  const [pointUpdateFeedback, setPointUpdateFeedback] = useState<string>('');
-  const [showCounterSimulator, setShowCounterSimulator] = useState<boolean>(false);
-
-  // Generate Unique QR Code on UID or points change
-  useEffect(() => {
-    const qrPayload = JSON.stringify({
-      app: 'HotelAlSheikhFarid',
-      service: 'counter_membership_scan',
-      uid: userUid,
-      name: user.name || 'Member',
-      phone: user.phone,
-      email: user.email,
-      points: loyaltyPoints,
-      tier: loyaltyTier,
-      timestamp: Date.now(),
-    });
-
-    QRCode.toDataURL(qrPayload, {
-      width: 400,
-      margin: 2,
-      color: {
-        dark: '#1c1917',
-        light: '#ffffff',
-      },
-      errorCorrectionLevel: 'H',
-    })
-      .then((url) => setQrCodeUrl(url))
-      .catch((err) => console.error('Error generating user QR Code:', err));
-  }, [userUid, user.name, user.phone, user.email, loyaltyPoints, loyaltyTier]);
 
   // Compute Monthly Spending & Order Frequency Trends
   const monthlySpendingData = useMemo<MonthlyTrendData[]>(() => {
@@ -464,22 +433,6 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
     });
   };
 
-  const handleCopyUid = () => {
-    navigator.clipboard.writeText(userUid);
-    setCopiedUid(true);
-    setTimeout(() => setCopiedUid(false), 2500);
-  };
-
-  const handleDownloadQr = () => {
-    if (!qrCodeUrl) return;
-    const link = document.createElement('a');
-    link.href = qrCodeUrl;
-    link.download = `Hotel-Al-Sheikh-Farid-${(user.name || 'Member').replace(/\s+/g, '_')}-QR.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const handleSimulateCounterPointAdd = (pointsToAdd: number, reasonBn: string, reasonEn: string) => {
     const newPoints = loyaltyPoints + pointsToAdd;
     const newHistoryItem: PointsHistoryItem = {
@@ -512,9 +465,6 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
     } catch {
       // Graceful fallback
     }
-
-    setPointUpdateFeedback(lang === 'bn' ? `✓ কাউন্টারে স্ক্যানে +${pointsToAdd} পয়েন্ট সফলভাবে জমা হয়েছে!` : `✓ +${pointsToAdd} points credited via counter scan!`);
-    setTimeout(() => setPointUpdateFeedback(''), 4000);
   };
 
   const getStatusBadge = (status: Order['status']) => {
@@ -891,202 +841,58 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                 </div>
               </div>
 
-              {/* Member Unique QR Code & Counter Scan Pass Card */}
-              <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-stone-900 via-stone-950 to-stone-900 border border-amber-500/30 text-white shadow-xl space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                        <QrCode className="w-4 h-4" />
-                      </span>
-                      <h4 className="text-sm font-bold text-amber-200 font-serif">
-                        {lang === 'bn' ? 'ডিজিটাল মেম্বার কিউআর কোড (কাউন্টার স্ক্যান পাস)' : 'Digital Membership QR Pass'}
-                      </h4>
+              {/* Loyalty Leaderboard Highlight Card */}
+              {onOpenLeaderboard && (
+                <div 
+                  onClick={() => {
+                    onClose();
+                    onOpenLeaderboard();
+                  }}
+                  className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 hover:border-amber-500 transition-all flex items-center justify-between gap-3 shadow-xs cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-stone-950 flex items-center justify-center font-bold shadow-md shrink-0 group-hover:scale-105 transition-transform">
+                      <Trophy className="w-5 h-5 text-stone-950" />
                     </div>
-                    <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
-                      {lang === 'bn' 
-                        ? 'হোটেল কাউন্টার বা ক্যাশ ডেস্কে এই কিউআর কোড স্ক্যান করে দ্রুত পয়েন্ট যোগ ও রিডিম করুন।'
-                        : 'Present this QR code at the hotel cashier counter to quickly add or redeem points.'}
-                    </p>
-                  </div>
-
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    <span>{lang === 'bn' ? 'সক্রিয় আইডি' : 'Active ID'}</span>
-                  </span>
-                </div>
-
-                {/* QR Code and Member Details Block */}
-                <div className="p-4 rounded-2xl bg-stone-900/90 border border-stone-800 flex flex-col sm:flex-row items-center gap-4">
-                  {/* QR Code Frame */}
-                  <div className="relative group cursor-pointer shrink-0" onClick={() => setIsQrModalOpen(true)}>
-                    <div className="w-36 h-36 bg-white p-2 rounded-2xl shadow-md border-2 border-amber-500/50 flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105">
-                      {qrCodeUrl ? (
-                        <img 
-                          src={qrCodeUrl} 
-                          alt="Customer Member QR Code" 
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
-                      )}
-                      {/* Corner Target Markers */}
-                      <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-amber-600 pointer-events-none" />
-                      <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-amber-600 pointer-events-none" />
-                      <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 border-amber-600 pointer-events-none" />
-                      <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 border-amber-600 pointer-events-none" />
-                    </div>
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center transition-opacity text-white text-[10px] font-bold gap-1">
-                      <Maximize2 className="w-3.5 h-3.5" />
-                      <span>{lang === 'bn' ? 'বড় করুন' : 'Enlarge'}</span>
-                    </div>
-                  </div>
-
-                  {/* Customer Information & Quick Action Buttons */}
-                  <div className="flex-1 w-full space-y-2.5 text-center sm:text-left">
                     <div>
-                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5">
-                        <p className="text-sm font-bold text-white font-serif">{user.name || 'সম্মানিত মেম্বার'}</p>
-                        <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
-                          {loyaltyTier}
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-black text-amber-950 font-serif">
+                          {lang === 'bn' ? 'শীর্ষ ৫ কাস্টমার লয়ালটি লিডারবোর্ড 🏆' : 'Top 5 Loyalty Leaderboard 🏆'}
+                        </h4>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500 text-stone-950">
+                          TOP 5
                         </span>
                       </div>
-                      <p className="text-[11px] text-stone-400 font-mono mt-0.5">{user.phone || '01700-112233'}</p>
+                      <p className="text-[11px] text-stone-600">
+                        {lang === 'bn' 
+                          ? 'সেরা ৫ নিয়মিত কাস্টমারদের মধ্যে স্থান পেয়ে জিতুন ৫০০ টাকার ফ্রি ভাউচার!' 
+                          : 'Compete for Top 5 ranking to win ৳500 food vouchers and VIP status.'}
+                      </p>
                     </div>
+                  </div>
 
-                    {/* Member UID Badge with Copy */}
-                    <div className="p-2 rounded-xl bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 overflow-hidden">
-                        <span className="text-[10px] text-stone-400 font-semibold uppercase">UID:</span>
-                        <span className="text-[11px] text-amber-300 font-mono font-bold truncate">
-                          {userUid}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyUid}
-                        className="px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-[10px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer border border-stone-700"
-                        title={lang === 'bn' ? 'আইডি কপি করুন' : 'Copy Member UID'}
-                      >
-                        {copiedUid ? (
-                          <>
-                            <CheckCheck className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">{lang === 'bn' ? 'কপি হয়েছে' : 'Copied'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>{lang === 'bn' ? 'কপি' : 'Copy'}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Action Buttons Row */}
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsQrModalOpen(true)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-98"
-                      >
-                        <Maximize2 className="w-3 h-3" />
-                        <span>{lang === 'bn' ? 'বড় করে দেখুন' : 'View Pass'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleDownloadQr}
-                        className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-98"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>{lang === 'bn' ? 'কিউআর ডাউনলোড' : 'Save QR'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowCounterSimulator((prev) => !prev)}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-98"
-                      >
-                        <Scan className="w-3 h-3" />
-                        <span>{lang === 'bn' ? 'কাউন্টার স্ক্যান টেস্ট' : 'Scan Test'}</span>
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-1 text-xs font-bold text-amber-900 group-hover:translate-x-0.5 transition-transform shrink-0">
+                    <span>{lang === 'bn' ? 'দেখুন' : 'View'}</span>
+                    <ArrowRight className="w-4 h-4 text-amber-700" />
                   </div>
                 </div>
+              )}
 
-                {/* Point Update Feedback Banner */}
-                {pointUpdateFeedback && (
-                  <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-bold">{pointUpdateFeedback}</span>
-                  </div>
-                )}
-
-                {/* Interactive Counter Point Update Simulator Box */}
-                {showCounterSimulator && (
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-stone-900 to-amber-950/40 border border-amber-500/30 space-y-2.5 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                        <h5 className="text-xs font-bold text-amber-200">
-                          {lang === 'bn' ? 'কাউন্টার স্ক্যান সিমুলেটর (পয়েন্ট ইনস্ট্যান্ট আপডেট)' : 'Counter Scanner Simulator (Instant Point Credit)'}
-                        </h5>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowCounterSimulator(false)}
-                        className="text-[10px] text-stone-400 hover:text-stone-200 cursor-pointer"
-                      >
-                        {lang === 'bn' ? 'লুকান' : 'Hide'}
-                      </button>
-                    </div>
-
-                    <p className="text-[11px] text-stone-400">
-                      {lang === 'bn' 
-                        ? 'রেস্টুরেন্টে খাবার ক্রয়ের পর ক্যাশিয়ার আপনার কিউআর কোড স্ক্যান করলে সরাসরি পয়েন্ট ব্যালেন্স বেড়ে যাবে।'
-                        : 'Simulate the cashier scanning your QR code to instantly update loyalty points for physical purchases.'}
-                    </p>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateCounterPointAdd(10, 'কাউন্টার স্ক্যান: ১০০ ৳ নাশতা বা চা ক্রয়', 'Counter Scan: BDT 100 Snacks Purchase')}
-                        className="p-2 rounded-xl bg-stone-800 hover:bg-amber-600/30 border border-stone-700 hover:border-amber-500/50 text-left transition-all cursor-pointer group"
-                      >
-                        <p className="text-xs font-bold text-amber-400 group-hover:text-amber-300">+১০ পয়েন্ট</p>
-                        <p className="text-[9px] text-stone-400">৳১০০ নাশতা/চা</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateCounterPointAdd(25, 'কাউন্টার স্ক্যান: ২৫০ ৳ দুপুর/রাতের খাবার', 'Counter Scan: BDT 250 Lunch/Dinner')}
-                        className="p-2 rounded-xl bg-stone-800 hover:bg-amber-600/30 border border-stone-700 hover:border-amber-500/50 text-left transition-all cursor-pointer group"
-                      >
-                        <p className="text-xs font-bold text-amber-400 group-hover:text-amber-300">+২৫ পয়েন্ট</p>
-                        <p className="text-[9px] text-stone-400">৳২৫০ খাবার</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateCounterPointAdd(50, 'কাউন্টার স্ক্যান: ৫০০ ৳ ফ্যামিলি ডিনার বা স্পেশাল মিষ্টি', 'Counter Scan: BDT 500 Family Dining')}
-                        className="p-2 rounded-xl bg-stone-800 hover:bg-amber-600/30 border border-stone-700 hover:border-amber-500/50 text-left transition-all cursor-pointer group"
-                      >
-                        <p className="text-xs font-bold text-amber-400 group-hover:text-amber-300">+৫০ পয়েন্ট</p>
-                        <p className="text-[9px] text-stone-400">৳৫০০ ফ্যামিলি ডিনার</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateCounterPointAdd(100, 'কাউন্টার স্ক্যান: ১০০০ ৳ ভিআইপি পার্সেল বা অনুষ্ঠান অর্ডার', 'Counter Scan: BDT 1000 VIP Feast')}
-                        className="p-2 rounded-xl bg-stone-800 hover:bg-amber-600/30 border border-stone-700 hover:border-amber-500/50 text-left transition-all cursor-pointer group"
-                      >
-                        <p className="text-xs font-bold text-amber-400 group-hover:text-amber-300">+১০০ পয়েন্ট</p>
-                        <p className="text-[9px] text-stone-400">৳১০০০ ভিআইপি</p>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* Loyalty QR Code Component with Live Counter Scanning Support */}
+              <LoyaltyQRCode
+                user={{
+                  ...user,
+                  loyaltyPoints: loyaltyPoints,
+                  loyaltyTier: loyaltyTier,
+                }}
+                lang={lang}
+                variant="card"
+                showSimulation={true}
+                onPointsUpdate={(newTotal, reasonBn, reasonEn) => {
+                  const added = newTotal - loyaltyPoints;
+                  handleSimulateCounterPointAdd(added, reasonBn, reasonEn);
+                }}
+              />
 
               {/* Point Earning & Redemption Rules Card */}
               <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 space-y-2.5">
@@ -1188,53 +994,16 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
           {activeTab === 'profile' && (
             <div className="space-y-4">
               {/* Member UID & QR Pass Quick Card */}
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-stone-900 via-stone-950 to-stone-900 border border-amber-500/40 text-white shadow-md flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div 
-                    onClick={() => setIsQrModalOpen(true)}
-                    className="w-12 h-12 bg-white p-1 rounded-xl shadow-xs border border-amber-500/60 cursor-pointer flex items-center justify-center hover:scale-105 transition-transform"
-                    title={lang === 'bn' ? 'কিউআর কোড বড় করে দেখুন' : 'Enlarge QR Code'}
-                  >
-                    {qrCodeUrl ? (
-                      <img src={qrCodeUrl} alt="QR Code" className="w-full h-full object-contain" />
-                    ) : (
-                      <QrCode className="w-6 h-6 text-stone-800" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-amber-200">
-                        {lang === 'bn' ? 'ডিজিটাল মেম্বার আইডি পাস' : 'Digital Member Pass'}
-                      </h4>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 uppercase">
-                        {loyaltyTier}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-stone-400 font-mono mt-0.5">
-                      UID: {userUid}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleCopyUid}
-                    className="p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors cursor-pointer border border-stone-700"
-                    title={lang === 'bn' ? 'UID কপি করুন' : 'Copy UID'}
-                  >
-                    {copiedUid ? <CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsQrModalOpen(true)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-                  >
-                    <Maximize2 className="w-3 h-3" />
-                    <span>{lang === 'bn' ? 'কিউআর পাস' : 'QR Pass'}</span>
-                  </button>
-                </div>
-              </div>
+              <LoyaltyQRCode
+                user={{
+                  ...user,
+                  loyaltyPoints: loyaltyPoints,
+                  loyaltyTier: loyaltyTier,
+                }}
+                lang={lang}
+                variant="compact"
+                showSimulation={false}
+              />
 
               {/* Google Auth Banner Card */}
               {!isGoogleSignedIn ? (
@@ -2113,124 +1882,6 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
           </button>
         </div>
       </div>
-
-      {/* FULLSCREEN DIGITAL VIP MEMBERSHIP PASS MODAL */}
-      {isQrModalOpen && (
-        <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-3xl bg-gradient-to-b from-stone-900 via-stone-950 to-stone-900 border-2 border-amber-500/60 shadow-2xl text-white overflow-hidden relative">
-            {/* Top Glow & Close Button */}
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-orange-500" />
-            <button
-              type="button"
-              onClick={() => setIsQrModalOpen(false)}
-              className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition-colors z-20 cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Pass Header */}
-            <div className="p-6 pb-4 text-center border-b border-stone-800/80 relative">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-stone-950 shadow-lg shadow-amber-500/20 mb-2">
-                <Crown className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold font-serif text-amber-200">হোটেল আল শেখ ফরিদ</h3>
-              <p className="text-[11px] text-amber-400 font-bold uppercase tracking-wider">
-                {loyaltyTier === 'platinum' ? 'প্ল্যাটিনাম এলিট ডিজিটাল পাস' :
-                 loyaltyTier === 'gold' ? 'গোল্ড রয়্যাল ডিজিটাল পাস' :
-                 loyaltyTier === 'silver' ? 'সিলভার ভিআইপি ডিজিটাল পাস' : 'মেম্বারশিপ ডিজিটাল পাস'}
-              </p>
-
-              <div className="mt-3 flex items-center justify-center gap-2">
-                <span className="text-xs font-bold text-white">{user.name || 'গ্রাহক / মেম্বার'}</span>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase">
-                  {loyaltyTier}
-                </span>
-              </div>
-            </div>
-
-            {/* High Definition QR Code Canvas Frame */}
-            <div className="p-6 flex flex-col items-center bg-stone-950/60">
-              <div className="p-3 bg-white rounded-3xl shadow-2xl border-4 border-amber-500/60 relative">
-                {qrCodeUrl ? (
-                  <img 
-                    src={qrCodeUrl} 
-                    alt="Customer UID QR Code" 
-                    className="w-52 h-52 object-contain"
-                  />
-                ) : (
-                  <div className="w-52 h-52 flex items-center justify-center">
-                    <Loader2 className="w-10 h-10 text-amber-600 animate-spin" />
-                  </div>
-                )}
-                {/* Decorative scanning laser line */}
-                <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 h-0.5 bg-amber-500/80 shadow-[0_0_8px_#f59e0b] pointer-events-none opacity-60" />
-              </div>
-
-              {/* UID Display */}
-              <div className="mt-4 w-full p-2.5 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 overflow-hidden">
-                  <span className="text-[10px] text-stone-400 font-semibold uppercase">UID:</span>
-                  <span className="text-xs font-mono font-bold text-amber-300 truncate">
-                    {userUid}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyUid}
-                  className="px-2.5 py-1 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-[10px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer border border-stone-700"
-                >
-                  {copiedUid ? (
-                    <>
-                      <CheckCheck className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">{lang === 'bn' ? 'কপি হয়েছে' : 'Copied'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>{lang === 'bn' ? 'কপি' : 'Copy'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Balance Summary */}
-              <div className="mt-3 w-full flex items-center justify-between px-2 text-xs">
-                <span className="text-stone-400">ব্যালেন্স:</span>
-                <span className="font-black text-amber-400 font-serif text-sm">
-                  {loyaltyPoints} পয়েন্ট (৳ {loyaltyPoints} সমমূল্য)
-                </span>
-              </div>
-
-              {/* Instructions */}
-              <p className="mt-3 text-[10px] text-stone-400 text-center leading-relaxed">
-                {lang === 'bn' 
-                  ? 'রেস্টুরেন্টের ক্যাশ কাউন্টার বা প্ল্যাটফর্ম ডেলিভারি বয়কে এই কিউআর কোড স্ক্যান করতে দিন।'
-                  : 'Show this QR code at the restaurant counter or to the platform delivery staff to verify your account.'}
-              </p>
-            </div>
-
-            {/* Modal Bottom Actions */}
-            <div className="p-4 bg-stone-900 border-t border-stone-800 flex gap-2">
-              <button
-                type="button"
-                onClick={handleDownloadQr}
-                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>{lang === 'bn' ? 'ছবি সেভ করুন' : 'Download QR'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsQrModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs transition-all cursor-pointer"
-              >
-                {lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
