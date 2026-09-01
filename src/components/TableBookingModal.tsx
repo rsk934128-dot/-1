@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   X,
   Calendar,
@@ -19,7 +20,9 @@ import {
   Layers,
   Heart,
   Briefcase,
-  Compass
+  Compass,
+  QrCode,
+  ScanLine
 } from 'lucide-react';
 import { TableReservation, TableType, UserProfile } from '../types';
 import { HOTEL_INFO } from '../data/initialData';
@@ -29,6 +32,7 @@ interface TableBookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirmBooking: (reservation: TableReservation) => void;
+  onOpenTableQrScanner?: () => void;
   user: UserProfile;
   lang: 'bn' | 'en';
 }
@@ -152,13 +156,37 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
   
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [successReservation, setSuccessReservation] = useState<TableReservation | null>(null);
+  const [reservationQrUrl, setReservationQrUrl] = useState<string>('');
 
   // Auto-sync customer details when user props change
-  React.useEffect(() => {
+  useEffect(() => {
     if (user?.name && !name) setName(user.name);
     if (user?.phone && !phone) setPhone(user.phone);
     if (user?.email && !email) setEmail(user.email);
   }, [user]);
+
+  // Generate QR code for confirmed reservation
+  useEffect(() => {
+    if (successReservation) {
+      const payload = JSON.stringify({
+        type: 'RESERVATION_PASS',
+        reservationId: successReservation.id,
+        customerName: successReservation.customerName,
+        customerPhone: successReservation.customerPhone,
+        tableNumber: successReservation.tableNumber,
+        tableType: successReservation.tableType,
+        date: successReservation.date,
+        timeSlot: successReservation.timeSlot,
+        guestCount: successReservation.guestCount,
+      });
+
+      QRCode.toDataURL(payload, {
+        width: 240,
+        margin: 2,
+        color: { dark: '#1c1917', light: '#ffffff' },
+      }).then(setReservationQrUrl).catch(() => {});
+    }
+  }, [successReservation]);
 
   if (!isOpen) return null;
 
@@ -326,6 +354,26 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
                   <p className="text-stone-700 italic">"{successReservation.specialRequests}"</p>
                 </div>
               )}
+
+              {/* Digital QR Reservation Pass */}
+              {reservationQrUrl && (
+                <div className="pt-3 border-t border-amber-200/80 flex flex-col sm:flex-row items-center gap-3 bg-white/70 p-3 rounded-xl">
+                  <div className="w-24 h-24 bg-white p-1.5 rounded-xl border border-amber-300 shadow-xs shrink-0 flex items-center justify-center">
+                    <img src={reservationQrUrl} alt="Reservation Pass QR" className="w-full h-full object-contain" />
+                  </div>
+                  <div className="text-left space-y-1">
+                    <span className="text-[10px] font-bold text-amber-900 uppercase flex items-center gap-1">
+                      <QrCode className="w-3.5 h-3.5 text-amber-600" />
+                      {lang === 'bn' ? 'ডিজিটাল টেবিল এন্ট্রি পাস' : 'Digital Table Entry Pass'}
+                    </span>
+                    <p className="text-[11px] text-stone-600 leading-snug">
+                      {lang === 'bn'
+                        ? 'রেস্তোরাঁয় পৌঁছানোর পর এই কিউআর কোডটি ম্যানেজার বা কিচেন কাউন্টারে দেখিয়ে দ্রুত টেবিলে বসুন।'
+                        : 'Show this QR pass at the cashier or waiter station upon arrival for fast check-in.'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action buttons in success */}
@@ -342,6 +390,35 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
         ) : (
           /* BOOKING FORM */
           <form onSubmit={handleBookingSubmit} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+            {/* Quick Instant Table QR Scanner Shortcut Bar */}
+            {onOpenTableQrScanner && (
+              <div className="p-3 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/40 rounded-2xl flex items-center justify-between gap-2 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center shrink-0">
+                    <ScanLine className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-stone-900">
+                      {lang === 'bn' ? 'ইতিমধ্যে রেস্তোরাঁয় বসে আছেন?' : 'Already seated at a table?'}
+                    </h5>
+                    <p className="text-[10px] text-stone-600">
+                      {lang === 'bn' ? 'মোবাইল ক্যামেরা দিয়ে টেবিল কিউআর স্ক্যান করুন' : 'Scan table QR code with camera'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenTableQrScanner();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs shadow-xs shrink-0 cursor-pointer flex items-center gap-1"
+                >
+                  <ScanLine className="w-3.5 h-3.5" />
+                  <span>{lang === 'bn' ? 'QR স্ক্যান' : 'Scan QR'}</span>
+                </button>
+              </div>
+            )}
             
             {/* Step 1: Table Seating Category */}
             <div className="space-y-2">

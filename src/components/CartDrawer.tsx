@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Trash2, 
@@ -17,10 +17,14 @@ import {
   Database,
   Coins,
   Sparkles,
-  Check
+  Check,
+  ScanLine,
+  CheckCircle2,
+  QrCode
 } from 'lucide-react';
-import { CartItem, OrderType, UserProfile } from '../types';
+import { ActiveTableSession, CartItem, OrderType, UserProfile } from '../types';
 import { VoiceSpecialNoteInput } from './VoiceSpecialNoteInput';
+import { HOTEL_TABLES_CATALOG } from './TableQrScannerModal';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -46,6 +50,8 @@ interface CartDrawerProps {
   user: UserProfile;
   lang: 'bn' | 'en';
   isCachedMode?: boolean;
+  activeTableSession?: ActiveTableSession | null;
+  onOpenTableQrScanner?: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -58,9 +64,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   user,
   lang,
   isCachedMode = false,
+  activeTableSession,
+  onOpenTableQrScanner,
 }) => {
-  const [orderType, setOrderType] = useState<OrderType>('delivery');
-  const [tableNumber, setTableNumber] = useState<string>('টেবিল ১');
+  const [orderType, setOrderType] = useState<OrderType>(activeTableSession ? 'dine_in' : 'delivery');
+  const [tableNumber, setTableNumber] = useState<string>(activeTableSession?.tableNumber || 'টেবিল ১');
   const [deliveryAddress, setDeliveryAddress] = useState<string>(user.address || 'স্টেশন রোড, রেলস্টেশন এলাকা');
   const [customerName, setCustomerName] = useState<string>(user.name || '');
   const [customerPhone, setCustomerPhone] = useState<string>(user.phone || '');
@@ -70,11 +78,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const availablePoints = user.loyaltyPoints !== undefined ? user.loyaltyPoints : 75;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (user.name) setCustomerName(user.name);
     if (user.phone) setCustomerPhone(user.phone);
     if (user.address) setDeliveryAddress(user.address);
   }, [user]);
+
+  useEffect(() => {
+    if (activeTableSession) {
+      setOrderType('dine_in');
+      setTableNumber(activeTableSession.tableNumber);
+    }
+  }, [activeTableSession]);
 
   if (!isOpen) return null;
 
@@ -303,21 +318,64 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 {/* Conditional Fields based on Order Type */}
                 <div className="space-y-3 pt-2">
                   {orderType === 'dine_in' && (
-                    <div>
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        {lang === 'bn' ? 'টেবিল নং নির্বাচন করুন:' : 'Select Table No:'}
-                      </label>
-                      <select
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs bg-white font-medium"
-                      >
-                        {[...Array(10)].map((_, i) => (
-                          <option key={i} value={`টেবিল ${i + 1}`}>
-                            {lang === 'bn' ? `টেবিল ${i + 1} (কাউন্টারের কাছে)` : `Table ${i + 1}`}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 block">
+                          {lang === 'bn' ? 'টেবিল নং নির্বাচন করুন:' : 'Select Table No:'}
+                        </label>
+                        {onOpenTableQrScanner && (
+                          <button
+                            type="button"
+                            onClick={onOpenTableQrScanner}
+                            className="text-[11px] text-amber-700 hover:text-amber-900 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <ScanLine className="w-3 h-3 text-amber-600" />
+                            <span>{lang === 'bn' ? '📷 কিউআর স্ক্যান করুন' : '📷 Scan QR'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {activeTableSession ? (
+                        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <div>
+                              <span className="text-xs font-black text-emerald-900 block">
+                                {lang === 'bn' ? activeTableSession.tableLabelBn : activeTableSession.tableLabelEn}
+                              </span>
+                              <span className="text-[10px] text-emerald-700">
+                                {lang === 'bn' ? '✓ কিউআর কোড ভেরিফাইড টেবিল' : '✓ QR Verified Table'}
+                              </span>
+                            </div>
+                          </div>
+                          {onOpenTableQrScanner && (
+                            <button
+                              type="button"
+                              onClick={onOpenTableQrScanner}
+                              className="px-2 py-1 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-bold cursor-pointer"
+                            >
+                              {lang === 'bn' ? 'পরিবর্তন' : 'Change'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <select
+                          value={tableNumber}
+                          onChange={(e) => setTableNumber(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs bg-white font-medium focus:ring-2 focus:ring-amber-500"
+                        >
+                          {HOTEL_TABLES_CATALOG.map((tbl) => (
+                            <option key={tbl.id} value={tbl.tableNumber}>
+                              {lang === 'bn' ? tbl.nameBn : tbl.nameEn}
+                            </option>
+                          ))}
+                          {[...Array(10)].map((_, i) => (
+                            <option key={`extra-${i}`} value={`টেবিল ${i + 1}`}>
+                              {lang === 'bn' ? `সাধারণ টেবিল ${i + 1}` : `Standard Table ${i + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   )}
 

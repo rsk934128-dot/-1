@@ -6,6 +6,7 @@ export interface SaaSSubscriptionPlan {
   badgeEn?: string;
   popular?: boolean;
   priceMonthlyBDT: number;
+  priceQuarterlyBDT: number;
   priceYearlyBDT: number;
   priceLifetimeBDT?: number;
   descriptionBn: string;
@@ -34,7 +35,7 @@ export interface SaaSTenant {
   location: string;
   planId: 'starter' | 'pro' | 'enterprise';
   status: 'active' | 'trial' | 'pending' | 'expired';
-  billingCycle: 'monthly' | 'yearly' | 'lifetime';
+  billingCycle: 'monthly' | 'quarterly' | 'yearly' | 'lifetime';
   licenseKey: string;
   domainUrl: string;
   totalOrdersProcessed: number;
@@ -52,14 +53,22 @@ export interface SaaSOrderRequest {
   email: string;
   district: string;
   planId: 'starter' | 'pro' | 'enterprise';
-  billingCycle: 'monthly' | 'yearly' | 'lifetime';
+  billingCycle: 'monthly' | 'quarterly' | 'yearly' | 'lifetime';
   priceBDT: number;
-  paymentMethod: 'bkash' | 'nagad' | 'rocket' | 'bank';
+  paymentMethod: 'stripe' | 'bkash' | 'nagad' | 'rocket' | 'bank';
   transactionId: string;
   desiredDomain?: string;
   notes?: string;
   requestedAt: string;
   status: 'pending' | 'verified' | 'deployed';
+  stripeReceipt?: {
+    cardBrand: string;
+    cardLast4: string;
+    paymentIntentId: string;
+    chargeId: string;
+    receiptUrl?: string;
+    paidAt: string;
+  };
 }
 
 export const SAAS_PLANS: SaaSSubscriptionPlan[] = [
@@ -71,6 +80,7 @@ export const SAAS_PLANS: SaaSSubscriptionPlan[] = [
     badgeEn: 'Small Dine-in & Cafe',
     popular: false,
     priceMonthlyBDT: 1999,
+    priceQuarterlyBDT: 5399,
     priceYearlyBDT: 19990,
     priceLifetimeBDT: 39990,
     descriptionBn: 'ছোট হোটেল, মিষ্টির দোকান ও চায়ের ক্যাফের জন্য উপযুক্ত ডিজিটাল অর্ডারিং সলিউশন।',
@@ -111,6 +121,7 @@ export const SAAS_PLANS: SaaSSubscriptionPlan[] = [
     badgeEn: '🔥 Most Popular & Highest ROI',
     popular: true,
     priceMonthlyBDT: 4999,
+    priceQuarterlyBDT: 13499,
     priceYearlyBDT: 47990,
     priceLifetimeBDT: 69990,
     descriptionBn: 'উচ্চ ভলিউম রেস্তোরাঁ ও ডেলিভারি কিচেনের জন্য ফুল-অটোমেটেড এআই ও বিকাশ এসএমএস সমন্বিত অল-ইন-ওয়ান সুইট।',
@@ -155,6 +166,7 @@ export const SAAS_PLANS: SaaSSubscriptionPlan[] = [
     badgeEn: '👑 Full Branding & Chain System',
     popular: false,
     priceMonthlyBDT: 12999,
+    priceQuarterlyBDT: 34999,
     priceYearlyBDT: 99990,
     priceLifetimeBDT: 149990,
     descriptionBn: 'মাল্টি-ব্রাঞ্চ ফুড চেইনের জন্য শতভাগ নিজস্ব ডোমেইন, প্লে-স্টোর অ্যাপ এবং এক্সক্লুসিভ ডেডিকেটেড ক্লাউড ডাটাবেস।',

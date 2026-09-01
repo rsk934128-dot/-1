@@ -23,7 +23,9 @@ import {
   ChevronUp,
   ChevronDown,
   QrCode,
-  Share2
+  Share2,
+  FileDown,
+  ChefHat
 } from 'lucide-react';
 import { FoodCategory } from '../types';
 
@@ -32,6 +34,7 @@ export interface VoiceCommandListenerProps {
   onOpenAccount: () => void;
   onOpenTableBooking?: () => void;
   onOpenShareAndQr?: () => void;
+  onOpenPrintMenu?: () => void;
   onStartCall: (type: 'audio' | 'video') => void;
   onOpenChat: () => void;
   onOpenEmail: () => void;
@@ -41,6 +44,7 @@ export interface VoiceCommandListenerProps {
   onSearchFood: (query: string) => void;
   onToggleLang: () => void;
   onToggleAdmin: () => void;
+  onToggleStaffMode?: () => void;
   lang: 'bn' | 'en';
   isListeningExternal?: boolean;
   onListeningChange?: (listening: boolean) => void;
@@ -63,6 +67,7 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
   onOpenAccount,
   onOpenTableBooking,
   onOpenShareAndQr,
+  onOpenPrintMenu,
   onStartCall,
   onOpenChat,
   onOpenEmail,
@@ -72,6 +77,7 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
   onSearchFood,
   onToggleLang,
   onToggleAdmin,
+  onToggleStaffMode,
   lang,
   isListeningExternal,
   onListeningChange,
@@ -212,6 +218,19 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
       },
       confirmVoiceBn: 'খাবারের মেনুতে নিয়ে যাচ্ছি',
       confirmVoiceEn: 'Navigating to fresh food menu',
+    },
+    {
+      id: 'print_menu',
+      icon: <FileDown className="w-4 h-4 text-amber-500" />,
+      labelBn: 'মেনু ডাউনলোড ও প্রিন্ট',
+      labelEn: 'Download & Print Menu',
+      keywordsBn: ['মেনু প্রিন্ট', 'প্রিন্ট মেনু', 'মেনু ডাউনলোড', 'পিডিএফ মেনু', 'পিডিএফ ডাউনলোড', 'মূল্যতালিকা প্রিন্ট', 'খাবারের তালিকা প্রিন্ট', 'রেট কার্ড'],
+      keywordsEn: ['print menu', 'download menu', 'pdf menu', 'menu pdf', 'download daily menu', 'print rate card'],
+      action: () => {
+        if (onOpenPrintMenu) onOpenPrintMenu();
+      },
+      confirmVoiceBn: 'দৈনিক খাবারের মেনু প্রিন্ট ও ডাউনলোড উইন্ডো খোলা হয়েছে',
+      confirmVoiceEn: 'Opening printable daily food menu window',
     },
     {
       id: 'category_sweets',
@@ -381,6 +400,19 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
       },
       confirmVoiceBn: 'মালিক মোড টগল করা হয়েছে',
       confirmVoiceEn: 'Toggling Owner Admin Dashboard',
+    },
+    {
+      id: 'toggle_staff_mode',
+      icon: <ChefHat className="w-4 h-4 text-amber-500" />,
+      labelBn: 'কিচেন ও স্টাফ মোড (শেফ টুলস)',
+      labelEn: 'Kitchen & Staff Mode',
+      keywordsBn: ['স্টাফ মোড', 'কিচেন মোড', 'শেফ মোড', 'রান্নাঘর মোড', 'শেফ টুলস', 'কিচেন'],
+      keywordsEn: ['staff mode', 'kitchen mode', 'chef mode', 'kitchen tools', 'chef'],
+      action: () => {
+        if (onToggleStaffMode) onToggleStaffMode();
+      },
+      confirmVoiceBn: 'কিচেন ও স্টাফ মোড টগল করা হয়েছে',
+      confirmVoiceEn: 'Toggling Kitchen & Staff Mode',
     },
   ];
 

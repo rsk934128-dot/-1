@@ -42,7 +42,14 @@ import {
   Globe,
   Key,
   Laptop,
-  X
+  X,
+  ChefHat,
+  Timer,
+  CheckSquare,
+  Square,
+  CheckCheck,
+  Zap,
+  BellRing
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -66,6 +73,7 @@ import { HOTEL_INFO } from '../data/initialData';
 import { INITIAL_SAAS_TENANTS, SaaSTenant, SAAS_PLANS, SaaSOrderRequest } from '../data/saasPlans';
 import { openDirectCustomWhatsApp } from '../utils/whatsappHelper';
 import { CategoryOrderDistributionD3Chart } from './CategoryOrderDistributionD3Chart';
+import { RevenueTrendsChart } from './RevenueTrendsChart';
 import { printOrderReceipt } from '../utils/printReceiptHelper';
 import { PrintableOrderReceipt } from './PrintableOrderReceipt';
 import { exportWeeklySummaryCsv } from '../utils/csvExporter';
@@ -84,6 +92,8 @@ interface AdminDashboardProps {
   currentAdminEmail?: string;
   onSelectAdminEmail?: (email: string) => void;
   onCloseAdmin: () => void;
+  isStaffMode?: boolean;
+  onToggleStaffMode?: () => void;
   lang: 'bn' | 'en';
 }
 
@@ -100,10 +110,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentAdminEmail = 'fs2217732@gmail.com',
   onSelectAdminEmail,
   onCloseAdmin,
+  isStaffMode = false,
+  onToggleStaffMode,
   lang,
 }) => {
   const [activeTab, setActiveTab] = useState<'orders' | 'webrtc' | 'menu' | 'stats' | 'saas'>('orders');
-  const [chartView, setChartView] = useState<'weekly' | 'category_stock' | 'hourly' | 'payment'>('weekly');
+  const [chartView, setChartView] = useState<'revenue_trends' | 'weekly' | 'category_stock' | 'hourly' | 'payment'>('revenue_trends');
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [editPriceVal, setEditPriceVal] = useState<number>(0);
   const [activePrintOrder, setActivePrintOrder] = useState<Order | null>(null);
@@ -111,6 +123,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [soundMuted, setSoundMuted] = useState<boolean>(SoundNotificationService.isMuted());
   const [soundVolume, setSoundVolume] = useState<number>(SoundNotificationService.getVolume());
   const [lastTestedSound, setLastTestedSound] = useState<string | null>(null);
+
+  // Kitchen Staff Mode State (Item Checklists, Urgent Flags, Flash Cooked Confirmation, Order Filter)
+  const [checkedKitchenItems, setCheckedKitchenItems] = useState<Record<string, boolean>>({});
+  const [urgentOrderIds, setUrgentOrderIds] = useState<Record<string, boolean>>({});
+  const [lastCookedOrderId, setLastCookedOrderId] = useState<string | null>(null);
+  const [orderFilter, setOrderFilter] = useState<'all' | 'pending_cooking' | 'cooked'>('all');
+
+  // Calculate elapsed minutes since order creation
+  const getElapsedPrepMinutes = (createdAt: string): number => {
+    try {
+      const createdTime = new Date(createdAt).getTime();
+      if (isNaN(createdTime)) return 0;
+      const diffMs = Date.now() - createdTime;
+      return Math.max(0, Math.floor(diffMs / 60000));
+    } catch {
+      return 0;
+    }
+  };
+
+  // Format timer in Bengali or English
+  const formatCookingTimer = (minutes: number, currentLang: 'bn' | 'en') => {
+    if (currentLang === 'bn') {
+      const bnDigits = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+      const bnStr = String(minutes).split('').map(d => bnDigits[parseInt(d, 10)] || d).join('');
+      return `${bnStr} মিনিট`;
+    }
+    return `${minutes} min`;
+  };
+
+  // Toggle individual item in kitchen prep checklist
+  const handleToggleKitchenItemCheck = (orderId: string, itemIdx: number) => {
+    const key = `${orderId}-${itemIdx}`;
+    setCheckedKitchenItems(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  // Toggle urgent priority flag on order card
+  const handleToggleUrgentPriority = (orderId: string) => {
+    setUrgentOrderIds(prev => ({
+      ...prev,
+      [orderId]: !prev[orderId]
+    }));
+  };
+
+  // Quick Mark as Cooked Handler
+  const handleQuickMarkCooked = (ord: Order) => {
+    SoundNotificationService.playKitchenBell();
+    setLastCookedOrderId(ord.id);
+    setTimeout(() => setLastCookedOrderId(null), 4000);
+
+    // Check off all item boxes for this order
+    const updated = { ...checkedKitchenItems };
+    ord.items.forEach((_, idx) => {
+      updated[`${ord.id}-${idx}`] = true;
+    });
+    setCheckedKitchenItems(updated);
+
+    // Update order status
+    const targetStatus: OrderStatus = ord.status === 'on_the_way' || ord.orderType === 'dine_in' ? 'completed' : 'on_the_way';
+    onUpdateOrderStatus(ord.id, targetStatus);
+  };
+
+  // Alert Server/Waiter Call Chime
+  const handleCallWaiterAlert = (ord: Order) => {
+    SoundNotificationService.playKitchenBell();
+    setLastTestedSound(`ওয়েটার অ্যালার্ট: ${ord.id}`);
+    setTimeout(() => setLastTestedSound(null), 2500);
+  };
 
   // SaaS Tenants & Leads State
   const [saasTenants, setSaasTenants] = useState<SaaSTenant[]>(() => {
@@ -140,7 +222,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     email: '',
     location: '',
     planId: 'pro' as 'starter' | 'pro' | 'enterprise',
-    billingCycle: 'yearly' as 'monthly' | 'yearly' | 'lifetime',
+    billingCycle: 'yearly' as 'monthly' | 'quarterly' | 'yearly' | 'lifetime',
     domainUrl: '',
     brandColor: '#d97706'
   });
@@ -679,11 +761,119 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Orders Tab */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
+          {/* Staff Mode Dedicated Kitchen Toolbar Banner */}
+          {isStaffMode && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/60 via-stone-950 to-orange-950/60 border-2 border-amber-500/60 shadow-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-stone-950 shadow-md">
+                    <ChefHat className="w-5 h-5 animate-bounce" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-black text-amber-300 font-serif">
+                        {lang === 'bn' ? '👨‍🍳 কিচেন ও স্টাফ ম্যানেজমেন্ট মোড সক্রিয়' : '👨‍🍳 Kitchen Staff & Chef Operations Mode'}
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-stone-950 uppercase animate-pulse">
+                        LIVE
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-300 mt-0.5">
+                      {lang === 'bn'
+                        ? '১-ক্লিকে "ঝটপট রান্না প্রস্তুত" করুন, ডিশ চেকলিস্ট টিক দিন এবং রান্নার টাইমার ট্র্যাক করুন।'
+                        : 'Quickly mark orders as cooked with 1 click, check off individual dishes, and track cooking prep timers.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {onToggleStaffMode && (
+                    <button
+                      onClick={onToggleStaffMode}
+                      className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-bold border border-stone-700 cursor-pointer transition-colors"
+                    >
+                      {lang === 'bn' ? 'স্টাফ মোড বন্ধ করুন' : 'Exit Staff Mode'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      SoundNotificationService.playKitchenBell();
+                      setLastTestedSound('কিচেন বেল ড্রিং!');
+                      setTimeout(() => setLastTestedSound(null), 2000);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+                    title="কিচেন সার্ভিস বেল বাজান"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? '🔔 টেস্ট কিচেন বেল' : '🔔 Test Kitchen Bell'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Kitchen Filters & Live Counts */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-stone-400 mr-1">
+                    {lang === 'bn' ? 'রান্নাঘর ফিল্টার:' : 'Filter:'}
+                  </span>
+                  <button
+                    onClick={() => setOrderFilter('all')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      orderFilter === 'all'
+                        ? 'bg-amber-500 text-stone-950 font-black shadow-xs'
+                        : 'bg-stone-900 text-stone-300 hover:bg-stone-800 border border-stone-800'
+                    }`}
+                  >
+                    {lang === 'bn' ? `সকল অর্ডার (${orders.length})` : `All (${orders.length})`}
+                  </button>
+                  <button
+                    onClick={() => setOrderFilter('pending_cooking')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      orderFilter === 'pending_cooking'
+                        ? 'bg-orange-500 text-white font-black shadow-xs'
+                        : 'bg-stone-900 text-orange-400 hover:bg-stone-800 border border-stone-800'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? `🍳 রান্না বাকি (${cookingOrdersCount})` : `🍳 Cooking Pending (${cookingOrdersCount})`}</span>
+                  </button>
+                  <button
+                    onClick={() => setOrderFilter('cooked')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      orderFilter === 'cooked'
+                        ? 'bg-emerald-600 text-white font-black shadow-xs'
+                        : 'bg-stone-900 text-emerald-400 hover:bg-stone-800 border border-stone-800'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? `✅ প্রস্তুত / সম্পন্ন (${completedOrdersCount})` : `✅ Cooked / Ready (${completedOrdersCount})`}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs font-mono text-amber-300/90">
+                  <span>⚡ কুইক মোড: সক্রিয়</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-stone-950 border border-stone-800">
             <div>
-              <h3 className="text-base font-bold text-amber-200 font-serif">
-                {lang === 'bn' ? 'গ্রাহকদের লাইভ অর্ডার ও যোগাযোগ তালিকা' : 'Live Incoming Customer Orders & Contact'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-amber-200 font-serif">
+                  {lang === 'bn' ? 'গ্রাহকদের লাইভ অর্ডার ও যোগাযোগ তালিকা' : 'Live Incoming Customer Orders & Contact'}
+                </h3>
+                {!isStaffMode && onToggleStaffMode && (
+                  <button
+                    onClick={onToggleStaffMode}
+                    className="px-2.5 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                    title="কিচেন স্টাফ মোড চালু করুন"
+                  >
+                    <ChefHat className="w-3 h-3 text-amber-300" />
+                    <span>{lang === 'bn' ? '👨‍🍳 স্টাফ মোড চালু করুন' : '👨‍🍳 Enable Staff Mode'}</span>
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-stone-400 mt-0.5">
                 {lang === 'bn' 
                   ? 'গ্রাহকদের সাথে WebRTC যোগাযোগ, রসিদ প্রিন্ট এবং অর্ডার প্রসেসিং।' 
@@ -705,155 +895,317 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="space-y-3">
-            {orders.map((ord) => (
-              <div
-                key={ord.id}
-                className="p-5 rounded-2xl bg-stone-950 border border-stone-800 space-y-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-stone-800">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-black text-amber-400">{ord.id}</span>
-                    <span className="text-xs text-stone-300 font-semibold">
-                      {ord.customerName} ({ord.customerPhone})
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/60 text-amber-200 border border-amber-700/50">
-                      {ord.orderType === 'dine_in' ? `টেবিল: ${ord.tableNumber}` : ord.orderType === 'parcel' ? 'পার্সেল' : 'ডেলিভারি'}
-                    </span>
-                  </div>
+            {orders
+              .filter(ord => {
+                if (orderFilter === 'pending_cooking') {
+                  return ord.status === 'cooking' || ord.status === 'pending';
+                }
+                if (orderFilter === 'cooked') {
+                  return ord.status === 'on_the_way' || ord.status === 'completed';
+                }
+                return true;
+              })
+              .map((ord) => {
+                const elapsedMins = getElapsedPrepMinutes(ord.createdAt);
+                const isUrgent = !!urgentOrderIds[ord.id];
+                const isRecentlyCooked = lastCookedOrderId === ord.id;
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    
-                    {/* WebRTC Direct Call Buttons to Customer */}
-                    {onStartCallWithCustomer && (
-                      <div className="flex items-center gap-1 bg-stone-900 p-1 rounded-xl border border-stone-800">
+                return (
+                  <div
+                    key={ord.id}
+                    className={`p-5 rounded-2xl bg-stone-950 transition-all space-y-3 ${
+                      isUrgent
+                        ? 'border-2 border-red-500/90 shadow-lg shadow-red-950/40 ring-1 ring-red-500'
+                        : isRecentlyCooked
+                        ? 'border-2 border-emerald-500 shadow-lg shadow-emerald-950/40'
+                        : 'border border-stone-800 hover:border-stone-700'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-stone-800">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-mono text-sm font-black text-amber-400">{ord.id}</span>
+                        <span className="text-xs text-stone-300 font-semibold">
+                          {ord.customerName} ({ord.customerPhone})
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/60 text-amber-200 border border-amber-700/50">
+                          {ord.orderType === 'dine_in' ? `টেবিল: ${ord.tableNumber}` : ord.orderType === 'parcel' ? 'পার্সেল' : 'ডেলিভারি'}
+                        </span>
+
+                        {/* Kitchen Prep Elapsed Live Timer */}
+                        {isStaffMode && (
+                          <div
+                            className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                              elapsedMins >= 20
+                                ? 'bg-red-950/80 text-red-300 border-red-500 animate-pulse'
+                                : elapsedMins >= 10
+                                ? 'bg-amber-950/80 text-amber-300 border-amber-500'
+                                : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                            }`}
+                            title="রান্নাঘরের অর্ডার ওয়েটিং সময়"
+                          >
+                            <Timer className="w-3 h-3" />
+                            <span>{formatCookingTimer(elapsedMins, lang)}</span>
+                            {elapsedMins >= 20 && <span className="text-[9px] text-red-400 font-black">🔥 জরুরি</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Kitchen Staff Quick Tools (Urgent Flag & Waiter Call) */}
+                        {isStaffMode && (
+                          <div className="flex items-center gap-1 bg-stone-900 p-1 rounded-xl border border-stone-800">
+                            <button
+                              onClick={() => handleToggleUrgentPriority(ord.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                isUrgent
+                                  ? 'bg-red-600 text-white shadow-xs font-black'
+                                  : 'bg-stone-800 hover:bg-red-950/50 text-stone-300 hover:text-red-300 border border-stone-700'
+                              }`}
+                              title="রান্নাঘরের জন্য জরুরি অগ্রাধিকার হিসেবে মার্ক করুন"
+                            >
+                              <Flame className={`w-3.5 h-3.5 ${isUrgent ? 'text-white fill-current' : 'text-red-400'}`} />
+                              <span>{isUrgent ? (lang === 'bn' ? 'জরুরি' : 'Urgent') : (lang === 'bn' ? 'অগ্রাধিকার' : 'Priority')}</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleCallWaiterAlert(ord)}
+                              className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1 border border-amber-500/40 cursor-pointer"
+                              title="ওয়েটার বা ফ্লোর বয়কে ডিশ পিকআপের জন্য ডাকুন"
+                            >
+                              <BellRing className="w-3.5 h-3.5 text-amber-300" />
+                              <span className="hidden sm:inline">{lang === 'bn' ? 'ওয়েটার' : 'Waiter'}</span>
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* WebRTC Direct Call Buttons to Customer */}
+                        {onStartCallWithCustomer && (
+                          <div className="flex items-center gap-1 bg-stone-900 p-1 rounded-xl border border-stone-800">
+                            <button
+                              onClick={() => onStartCallWithCustomer(ord.customerName, ord.customerPhone, 'audio')}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-bold flex items-center gap-1 border border-emerald-500/40 cursor-pointer"
+                              title="গ্রাহককে WebRTC অডিও কল দিন"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>কল</span>
+                            </button>
+                            <button
+                              onClick={() => onStartCallWithCustomer(ord.customerName, ord.customerPhone, 'video')}
+                              className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 text-xs font-bold flex items-center gap-1 border border-blue-500/40 cursor-pointer"
+                              title="গ্রাহককে WebRTC ভিডিও কল দিন"
+                            >
+                              <Video className="w-3.5 h-3.5" />
+                              <span>ভিডিও</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {onOpenBkashSms && ord.paymentMethod === 'bkash' && (
+                          <button
+                            onClick={() => onOpenBkashSms(ord)}
+                            className="px-2.5 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 text-xs font-semibold flex items-center gap-1 border border-pink-500/40 cursor-pointer"
+                            title="এই অর্ডারের বিকাশ এসএমএস লেটার দেখুন ও ভেরিফাই করুন"
+                          >
+                            <div className="w-3.5 h-3.5 rounded bg-pink-600 text-white text-[8px] font-black flex items-center justify-center">
+                              bK
+                            </div>
+                            <span>{lang === 'bn' ? 'SMS ভেরিফাই' : 'SMS Verify'}</span>
+                          </button>
+                        )}
+
+                        {onEmailInvoice && (
+                          <button
+                            onClick={() => onEmailInvoice(ord)}
+                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1 border border-amber-500/40 cursor-pointer"
+                            title="Gmail দিয়ে ইনভয়েস পাঠান"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{lang === 'bn' ? 'Gmail' : 'Gmail'}</span>
+                          </button>
+                        )}
+
+                        {/* Print Receipt Button */}
                         <button
-                          onClick={() => onStartCallWithCustomer(ord.customerName, ord.customerPhone, 'audio')}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-bold flex items-center gap-1 border border-emerald-500/40 cursor-pointer"
-                          title="গ্রাহককে WebRTC অডিও কল দিন"
+                          onClick={() => handlePrintOrder(ord)}
+                          className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1 border border-stone-700 cursor-pointer transition-colors shadow-2xs"
+                          title="অর্ডার রসিদ / কিচেন টোকেন প্রিন্ট করুন"
                         >
-                          <Phone className="w-3.5 h-3.5" />
-                          <span>কল</span>
+                          <Printer className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{lang === 'bn' ? 'রসিদ' : 'Print'}</span>
                         </button>
-                        <button
-                          onClick={() => onStartCallWithCustomer(ord.customerName, ord.customerPhone, 'video')}
-                          className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 text-xs font-bold flex items-center gap-1 border border-blue-500/40 cursor-pointer"
-                          title="গ্রাহককে WebRTC ভিডিও কল দিন"
-                        >
-                          <Video className="w-3.5 h-3.5" />
-                          <span>ভিডিও</span>
-                        </button>
+
+                        <span className="text-sm font-black text-white">৳ {ord.total}</span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-stone-800 text-stone-300 uppercase">
+                          {ord.paymentMethod} {ord.paymentStatus === 'verified' || ord.paymentStatus === 'paid' ? '✓ পেইড' : 'ক্যাশ বাকি'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Recently Cooked Notification Toast on Card */}
+                    {isRecentlyCooked && (
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/90 via-stone-900 to-emerald-950/90 border border-emerald-500 text-emerald-200 text-xs font-bold flex items-center justify-between gap-2 shadow-md animate-bounce">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>
+                            {lang === 'bn'
+                              ? '✅ রান্না প্রস্তুত! খাবার পরিবেশন বা ডেলিভারির জন্য প্রস্তুত।'
+                              : '✅ Dish Marked Cooked! Ready for table serving or rider handover.'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500 text-stone-950 font-black">
+                          READY
+                        </span>
                       </div>
                     )}
 
-                    {onOpenBkashSms && ord.paymentMethod === 'bkash' && (
-                      <button
-                        onClick={() => onOpenBkashSms(ord)}
-                        className="px-2.5 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 text-xs font-semibold flex items-center gap-1 border border-pink-500/40 cursor-pointer"
-                        title="এই অর্ডারের বিকাশ এসএমএস লেটার দেখুন ও ভেরিফাই করুন"
-                      >
-                        <div className="w-3.5 h-3.5 rounded bg-pink-600 text-white text-[8px] font-black flex items-center justify-center">
-                          bK
-                        </div>
-                        <span>{lang === 'bn' ? 'SMS ভেরিফাই' : 'SMS Verify'}</span>
-                      </button>
-                    )}
+                    {/* Items & Kitchen Prep Checklist */}
+                    <div className="text-xs text-stone-300 space-y-1.5">
+                      {isStaffMode && (
+                        <p className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">
+                          {lang === 'bn' ? '👨‍🍳 ডিশ প্রিপারেশন চেকলিস্ট (ক্লিক করে প্রস্তুত মার্ক করুন):' : '👨‍🍳 Dish Prep Checklist (Click to check off):'}
+                        </p>
+                      )}
+                      
+                      {ord.items.map((it, idx) => {
+                        const isItemChecked = !!checkedKitchenItems[`${ord.id}-${idx}`];
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => isStaffMode && handleToggleKitchenItemCheck(ord.id, idx)}
+                            className={`flex items-center justify-between p-1.5 rounded-xl transition-all ${
+                              isStaffMode ? 'cursor-pointer hover:bg-stone-900/90 active:scale-[0.99]' : ''
+                            } ${
+                              isItemChecked
+                                ? 'bg-emerald-950/30 text-emerald-300 border border-emerald-800/40'
+                                : 'bg-stone-900/40 border border-stone-800/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {isStaffMode && (
+                                <button
+                                  type="button"
+                                  className="text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+                                  title="ডিশ প্রস্তুত হলে টিক দিন"
+                                >
+                                  {isItemChecked ? (
+                                    <CheckSquare className="w-4 h-4 text-emerald-400" />
+                                  ) : (
+                                    <Square className="w-4 h-4 text-stone-500" />
+                                  )}
+                                </button>
+                              )}
+                              <span className={isItemChecked ? 'line-through text-stone-400 font-medium' : 'font-semibold text-stone-200'}>
+                                • {it.food.nameBn} {it.selectedPortion ? `(${it.selectedPortion.labelBn})` : ''} x {it.quantity}
+                              </span>
+                            </div>
 
-                    {onEmailInvoice && (
-                      <button
-                        onClick={() => onEmailInvoice(ord)}
-                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1 border border-amber-500/40 cursor-pointer"
-                        title="Gmail দিয়ে ইনভয়েস পাঠান"
-                      >
-                        <Mail className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{lang === 'bn' ? 'Gmail' : 'Gmail'}</span>
-                      </button>
-                    )}
+                            <div className="flex items-center gap-2">
+                              {isItemChecked && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/70 text-emerald-300 border border-emerald-600/40 font-bold">
+                                  ✓ প্লেটে প্রস্তুত
+                                </span>
+                              )}
+                              <span className="font-semibold text-stone-400">
+                                ৳ {(it.selectedPortion ? it.selectedPortion.price : it.food.price) * it.quantity}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
 
-                    {/* Print Receipt Button */}
-                    <button
-                      onClick={() => handlePrintOrder(ord)}
-                      className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1 border border-stone-700 cursor-pointer transition-colors shadow-2xs"
-                      title="অর্ডার রসিদ / কিচেন টোকেন প্রিন্ট করুন"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{lang === 'bn' ? 'রসিদ প্রিন্ট' : 'Print'}</span>
-                    </button>
-
-                    <span className="text-sm font-black text-white">৳ {ord.total}</span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-stone-800 text-stone-300 uppercase">
-                      {ord.paymentMethod} {ord.paymentStatus === 'verified' || ord.paymentStatus === 'paid' ? '✓ পেইড' : 'ক্যাশ বাকি'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Items */}
-                <div className="text-xs text-stone-300 space-y-1">
-                  {ord.items.map((it, idx) => (
-                    <div key={idx} className="flex justify-between">
-                      <span>• {it.food.nameBn} {it.selectedPortion ? `(${it.selectedPortion.labelBn})` : ''} x {it.quantity}</span>
-                      <span className="font-semibold text-stone-400">৳ {(it.selectedPortion ? it.selectedPortion.price : it.food.price) * it.quantity}</span>
+                      {ord.specialNote && (
+                        <p className="text-[11px] text-amber-300 italic pt-1 flex items-center gap-1">
+                          <span className="font-bold not-italic">বিশেষ নোট:</span> "{ord.specialNote}"
+                        </p>
+                      )}
+                      {ord.deliveryAddress && (
+                        <p className="text-[11px] text-stone-400">
+                          ঠিকানা: {ord.deliveryAddress}
+                        </p>
+                      )}
                     </div>
-                  ))}
-                  {ord.specialNote && (
-                    <p className="text-[11px] text-amber-300 italic pt-1">
-                      বিশেষ নোট: "{ord.specialNote}"
-                    </p>
-                  )}
-                  {ord.deliveryAddress && (
-                    <p className="text-[11px] text-stone-400">
-                      ঠিকানা: {ord.deliveryAddress}
-                    </p>
-                  )}
-                </div>
 
-                {/* Status Action Buttons */}
-                <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stone-800/80">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-stone-400">বর্তমান স্ট্যাটাস:</span>
-                    <span className="font-bold text-amber-400 capitalize">{ord.status}</span>
+                    {/* Status Action Buttons */}
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stone-800/80">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-stone-400">বর্তমান স্ট্যাটাস:</span>
+                        <span className={`font-bold capitalize px-2 py-0.5 rounded text-[11px] ${
+                          ord.status === 'completed'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/50'
+                            : ord.status === 'on_the_way'
+                            ? 'bg-blue-950 text-blue-300 border border-blue-700/50'
+                            : ord.status === 'cooking'
+                            ? 'bg-amber-950 text-amber-300 border border-amber-700/50'
+                            : 'bg-stone-900 text-stone-300 border border-stone-700'
+                        }`}>
+                          {ord.status}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-1.5 flex-wrap items-center">
+                        {/* Quick Mark as Cooked Button (Highlighted when Staff Mode is enabled) */}
+                        {isStaffMode && (
+                          <button
+                            id={`quick-cooked-btn-${ord.id}`}
+                            onClick={() => handleQuickMarkCooked(ord)}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95 ${
+                              ord.status === 'on_the_way' || ord.status === 'completed'
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white ring-2 ring-emerald-400/50 shadow-emerald-950/50'
+                                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-stone-950 ring-2 ring-amber-300 animate-pulse'
+                            }`}
+                            title="১ ক্লিকে রান্না সম্পন্ন মার্ক করুন এবং কিচেন বেল বাজান"
+                          >
+                            <ChefHat className="w-4 h-4 text-stone-950" />
+                            <Zap className="w-3.5 h-3.5 text-stone-950" />
+                            <span>
+                              {ord.status === 'completed' || ord.status === 'on_the_way'
+                                ? (lang === 'bn' ? '✓ রান্না প্রস্তুত' : '✓ Cooked & Ready')
+                                : (lang === 'bn' ? '⚡ ঝটপট রান্না প্রস্তুত' : '⚡ Quick Mark as Cooked')}
+                            </span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => onUpdateOrderStatus(ord.id, 'cooking')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                            ord.status === 'cooking'
+                              ? 'bg-amber-500 text-stone-950 font-black'
+                              : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                          }`}
+                        >
+                          <Flame className="w-3.5 h-3.5" />
+                          <span>রান্না হচ্ছে</span>
+                        </button>
+
+                        <button
+                          onClick={() => onUpdateOrderStatus(ord.id, 'on_the_way')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                            ord.status === 'on_the_way'
+                              ? 'bg-blue-500 text-white font-black'
+                              : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                          }`}
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                          <span>ডেলিভারির পথে</span>
+                        </button>
+
+                        <button
+                          onClick={() => onUpdateOrderStatus(ord.id, 'completed')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            ord.status === 'completed'
+                              ? 'bg-emerald-600 text-white font-black ring-2 ring-emerald-400/40 shadow-xs'
+                              : 'bg-stone-800 hover:bg-emerald-950/70 hover:text-emerald-300 text-stone-200 border border-stone-700'
+                          }`}
+                          title="ডেলিভারি সম্পন্ন ও গ্রাহককে পুশ নোটিফিকেশন অ্যালার্ট পাঠান"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{lang === 'bn' ? 'ডেলিভারি সম্পন্ন' : 'Delivered'}</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="flex gap-1.5 flex-wrap">
-                    <button
-                      onClick={() => onUpdateOrderStatus(ord.id, 'cooking')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-                        ord.status === 'cooking'
-                          ? 'bg-amber-500 text-stone-950 font-black'
-                          : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
-                      }`}
-                    >
-                      <Flame className="w-3.5 h-3.5" />
-                      <span>রান্না হচ্ছে</span>
-                    </button>
-
-                    <button
-                      onClick={() => onUpdateOrderStatus(ord.id, 'on_the_way')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-                        ord.status === 'on_the_way'
-                          ? 'bg-blue-500 text-white font-black'
-                          : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
-                      }`}
-                    >
-                      <Truck className="w-3.5 h-3.5" />
-                      <span>ডেলিভারির পথে</span>
-                    </button>
-
-                    <button
-                      onClick={() => onUpdateOrderStatus(ord.id, 'completed')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        ord.status === 'completed'
-                          ? 'bg-emerald-600 text-white font-black ring-2 ring-emerald-400/40 shadow-xs'
-                          : 'bg-stone-800 hover:bg-emerald-950/70 hover:text-emerald-300 text-stone-200 border border-stone-700'
-                      }`}
-                      title="ডেলিভারি সম্পন্ন ও গ্রাহককে পুশ নোটিফিকেশন অ্যালার্ট পাঠান"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{lang === 'bn' ? 'ডেলিভারি সম্পন্ন (পুশ অ্যালার্ট)' : 'Delivered (Push Alert)'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                );
+              })}
           </div>
         </div>
       )}
@@ -1075,6 +1427,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex flex-wrap items-center gap-1.5 bg-stone-900 p-1.5 rounded-xl border border-stone-800">
               <button
                 type="button"
+                onClick={() => setChartView('revenue_trends')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  chartView === 'revenue_trends' 
+                    ? 'bg-amber-500 text-stone-950 shadow-xs font-black' 
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>{lang === 'bn' ? 'দৈনিক ও মাসিক আয় ট্রেন্ড (Recharts)' : 'Revenue Trends (Daily & Monthly)'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setChartView('weekly')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   chartView === 'weekly' 
@@ -1082,8 +1447,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
               >
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>{lang === 'bn' ? 'দৈনিক ট্রেন্ড (৭ দিন)' : 'Daily Trends (7-Day)'}</span>
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{lang === 'bn' ? 'সাপ্তাহিক সামারি (৭ দিন)' : 'Weekly Summary'}</span>
               </button>
 
               <button
@@ -1167,6 +1532,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-[10px] text-stone-500 mt-0.5 font-medium">আন্তঃনগর ট্রেন শিডিউল রাশ</p>
             </div>
           </div>
+
+          {/* MAIN RECHARTS COMPONENT: Daily & Monthly Revenue Trends from Completed Orders */}
+          {chartView === 'revenue_trends' && (
+            <RevenueTrendsChart
+              orders={orders}
+              lang={lang}
+            />
+          )}
 
           {/* MAIN CHART 1: 7-Day Daily Orders & Total Revenue Trends */}
           {chartView === 'weekly' && (
@@ -1783,6 +2156,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         className="w-full px-3 py-2 bg-stone-950 rounded-xl border border-stone-700 text-white focus:outline-none"
                       >
                         <option value="monthly">মাসিক (Monthly)</option>
+                        <option value="quarterly">ত্রৈমাসিক (Quarterly - ৩ মাস)</option>
                         <option value="yearly">বাৎসরিক (Yearly)</option>
                         <option value="lifetime">লাইফটাইম (Lifetime)</option>
                       </select>

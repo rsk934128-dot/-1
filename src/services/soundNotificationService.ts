@@ -255,6 +255,47 @@ class SoundNotificationServiceClass {
   }
 
   /**
+   * Plays a crisp high-tech scanner confirmation beep for QR code reading.
+   */
+  public playQrScanSuccess(): void {
+    if (this.muted) return;
+    const ctx = this.getOrCreateContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const master = this.createMasterGain(ctx, 0.85);
+
+      // 2 quick high-pitch chirps: 1760Hz (A6) -> 2349Hz (D7)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(1760, now);
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.3, now + 0.005);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc1.connect(gain1);
+      gain1.connect(master);
+      osc1.start(now);
+      osc1.stop(now + 0.09);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(2349, now + 0.08);
+      gain2.gain.setValueAtTime(0, now + 0.08);
+      gain2.gain.linearRampToValueAtTime(0.35, now + 0.085);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc2.connect(gain2);
+      gain2.connect(master);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.24);
+    } catch {
+      // Graceful fallback
+    }
+  }
+
+  /**
    * General pleasant notification chime (for push alerts & delivery toasts).
    */
   public playNotificationChime(): void {

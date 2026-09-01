@@ -183,7 +183,19 @@ export interface HotelInfo {
 }
 
 export type TableType = 'standard' | 'family_cabin' | 'vip_ac' | 'train_view' | 'rooftop';
-export type ReservationStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
+export type ReservationStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed' | 'checked_in' | 'seated';
+
+export interface ActiveTableSession {
+  tableNumber: string;
+  tableLabelBn: string;
+  tableLabelEn: string;
+  tableType?: TableType;
+  checkInTime: string;
+  customerName?: string;
+  guestCount?: number;
+  reservationId?: string;
+  source: 'camera_qr' | 'manual' | 'reservation_sync';
+}
 
 export interface TableReservation {
   id: string;

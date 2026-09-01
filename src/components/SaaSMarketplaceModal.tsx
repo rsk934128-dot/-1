@@ -30,10 +30,14 @@ import {
   Radio,
   Clock,
   Printer,
-  ShoppingBag
+  ShoppingBag,
+  CreditCard,
+  Lock,
+  Receipt
 } from 'lucide-react';
 import { SAAS_PLANS, SaaSSubscriptionPlan, SAAS_CONTACT_INFO, INITIAL_SAAS_TENANTS, SaaSOrderRequest } from '../data/saasPlans';
-import { openDirectWhatsApp } from '../utils/whatsappHelper';
+import { openDirectCustomWhatsApp } from '../utils/whatsappHelper';
+import { StripeBillingMockup } from './StripeBillingMockup';
 
 interface SaaSMarketplaceModalProps {
   isOpen: boolean;
@@ -46,8 +50,8 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
   onClose,
   lang = 'bn'
 }) => {
-  const [activeTab, setActiveTab] = useState<'plans' | 'calculator' | 'simulator' | 'checkout' | 'clients'>('plans');
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'lifetime'>('yearly');
+  const [activeTab, setActiveTab] = useState<'plans' | 'stripe' | 'calculator' | 'simulator' | 'checkout' | 'clients'>('plans');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('yearly');
   const [selectedPlanId, setSelectedPlanId] = useState<'starter' | 'pro' | 'enterprise'>('pro');
 
   // ROI Calculator State
@@ -86,9 +90,11 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
     const selectedPlan = SAAS_PLANS.find(p => p.id === selectedPlanId) || SAAS_PLANS[1];
     const planMonthlyEquivalent = billingCycle === 'yearly' 
       ? Math.round(selectedPlan.priceYearlyBDT / 12)
-      : billingCycle === 'lifetime'
-        ? Math.round((selectedPlan.priceLifetimeBDT || 70000) / 24)
-        : selectedPlan.priceMonthlyBDT;
+      : billingCycle === 'quarterly'
+        ? Math.round(selectedPlan.priceQuarterlyBDT / 3)
+        : billingCycle === 'lifetime'
+          ? Math.round((selectedPlan.priceLifetimeBDT || 70000) / 24)
+          : selectedPlan.priceMonthlyBDT;
 
     const monthlyNetSavings = Math.max(0, monthlyCommissionPaidToAggregators - planMonthlyEquivalent);
     const yearlyNetSavings = monthlyNetSavings * 12;
@@ -107,6 +113,11 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
 
   const currentPlan = SAAS_PLANS.find(p => p.id === selectedPlanId) || SAAS_PLANS[1];
 
+  const handlePlanSelectAndGoToStripe = (planId: 'starter' | 'pro' | 'enterprise') => {
+    setSelectedPlanId(planId);
+    setActiveTab('stripe');
+  };
+
   const handlePlanSelectAndGoToCheckout = (planId: 'starter' | 'pro' | 'enterprise') => {
     setSelectedPlanId(planId);
     setActiveTab('checkout');
@@ -121,9 +132,11 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
 
     const priceBDT = billingCycle === 'yearly'
       ? currentPlan.priceYearlyBDT
-      : billingCycle === 'lifetime'
-        ? (currentPlan.priceLifetimeBDT || 69990)
-        : currentPlan.priceMonthlyBDT;
+      : billingCycle === 'quarterly'
+        ? currentPlan.priceQuarterlyBDT
+        : billingCycle === 'lifetime'
+          ? (currentPlan.priceLifetimeBDT || 69990)
+          : currentPlan.priceMonthlyBDT;
 
     const orderRequest: SaaSOrderRequest = {
       id: `SAAS-REQ-${Date.now().toString().slice(-6)}`,
@@ -172,7 +185,7 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
 
 দয়া করে আমার লাইসেন্সটি দ্রুত অ্যাক্টিভেশন ও অনবোর্ডিং ব্যবস্থা করুন। ধন্যবাদ!`;
 
-    openDirectWhatsApp(SAAS_CONTACT_INFO.salesWhatsApp, msg);
+    openDirectCustomWhatsApp(SAAS_CONTACT_INFO.salesWhatsApp, msg);
   };
 
   const colorPresets = [
@@ -233,7 +246,22 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
               }`}
             >
               <DollarSign className="w-4 h-4" />
-              <span>{lang === 'bn' ? 'প্যাকেজ ও মূল্য তালিকা' : 'Pricing Plans'}</span>
+              <span>{lang === 'bn' ? 'সাবস্ক্রিপশন প্ল্যান ও মূল্য' : 'Subscription Plans'}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('stripe')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer relative ${
+                activeTab === 'stripe'
+                  ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300'
+                  : 'bg-indigo-950/80 hover:bg-indigo-900/90 text-indigo-200 border border-indigo-500/30'
+              }`}
+            >
+              <CreditCard className="w-4 h-4 text-emerald-400" />
+              <span>{lang === 'bn' ? 'স্ট্রাইপ কার্ড বিলিং গেটওয়ে' : 'Stripe Card Billing'}</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-400 text-stone-950 text-[9px] font-black uppercase">
+                Instant
+              </span>
             </button>
 
             <button
@@ -257,7 +285,7 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
               }`}
             >
               <Palette className="w-4 h-4" />
-              <span>{lang === 'bn' ? 'হোয়াইট-লেবেল প্রিভিউ সিমুলেটর' : 'Brand Simulator'}</span>
+              <span>{lang === 'bn' ? 'হোয়াইট-লেবেল প্রিভিউ' : 'Brand Simulator'}</span>
             </button>
 
             <button
@@ -269,7 +297,7 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>{lang === 'bn' ? 'সরাসরি লাইসেন্স বুকিং' : 'Instant Order'}</span>
+              <span>{lang === 'bn' ? 'বিকাশ/ম্যানুয়াল বুকিং' : 'bKash/MFS Order'}</span>
             </button>
 
             <button
@@ -281,7 +309,7 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
               }`}
             >
               <Store className="w-4 h-4" />
-              <span>{lang === 'bn' ? 'সক্রিয় রেস্তোরাঁ ক্লায়েন্ট' : 'Active Clients'}</span>
+              <span>{lang === 'bn' ? 'সক্রিয় ক্লায়েন্ট' : 'Active Clients'}</span>
             </button>
           </div>
         </div>
@@ -295,44 +323,58 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
               {/* Billing Cycle Switcher */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <span className="text-xs sm:text-sm font-bold text-stone-600">
-                  {lang === 'bn' ? 'বিলিং সাইকেল নির্বাচন করুন:' : 'Choose Billing Cycle:'}
+                  {lang === 'bn' ? 'সাবস্ক্রিপশন সময়কাল নির্বাচন করুন:' : 'Choose Billing Term:'}
                 </span>
-                <div className="bg-stone-200 p-1 rounded-2xl flex items-center gap-1 border border-stone-300">
+                <div className="bg-stone-200 p-1 rounded-2xl flex flex-wrap items-center gap-1 border border-stone-300">
                   <button
                     onClick={() => setBillingCycle('monthly')}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
                       billingCycle === 'monthly'
                         ? 'bg-white text-stone-900 shadow-sm'
                         : 'text-stone-600 hover:text-stone-900'
                     }`}
                   >
-                    {lang === 'bn' ? 'মাসিক বিলিং' : 'Monthly'}
+                    {lang === 'bn' ? 'মাসিক (Monthly)' : 'Monthly'}
+                  </button>
+
+                  <button
+                    onClick={() => setBillingCycle('quarterly')}
+                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 relative ${
+                      billingCycle === 'quarterly'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                  >
+                    <span>{lang === 'bn' ? 'ত্রৈমাসিক (৩ মাস)' : 'Quarterly (3 Mo)'}</span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black">
+                      ১০% ছাড়
+                    </span>
                   </button>
 
                   <button
                     onClick={() => setBillingCycle('yearly')}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                       billingCycle === 'yearly'
                         ? 'bg-amber-600 text-white shadow-sm'
                         : 'text-stone-600 hover:text-stone-900'
                     }`}
                   >
-                    <span>{lang === 'bn' ? 'বাৎসরিক বিলিং' : 'Yearly'}</span>
-                    <span className="px-1.5 py-0.5 rounded-full bg-amber-300 text-stone-950 text-[10px] font-black animate-pulse">
+                    <span>{lang === 'bn' ? 'বাৎসরিক (১ বছর)' : 'Yearly (12 Mo)'}</span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-400 text-stone-950 text-[10px] font-black animate-pulse">
                       ২০% ছাড়
                     </span>
                   </button>
 
                   <button
                     onClick={() => setBillingCycle('lifetime')}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                       billingCycle === 'lifetime'
                         ? 'bg-stone-900 text-amber-400 shadow-sm'
                         : 'text-stone-600 hover:text-stone-900'
                     }`}
                   >
                     <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{lang === 'bn' ? 'লাইফটাইম ওয়ান-টাইম' : 'Lifetime'}</span>
+                    <span>{lang === 'bn' ? 'লাইফটাইম' : 'Lifetime'}</span>
                   </button>
                 </div>
               </div>
@@ -343,28 +385,32 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
                   const isSelected = selectedPlanId === plan.id;
                   const price = billingCycle === 'yearly' 
                     ? plan.priceYearlyBDT 
-                    : billingCycle === 'lifetime' 
-                      ? (plan.priceLifetimeBDT || 69990) 
-                      : plan.priceMonthlyBDT;
+                    : billingCycle === 'quarterly'
+                      ? plan.priceQuarterlyBDT
+                      : billingCycle === 'lifetime' 
+                        ? (plan.priceLifetimeBDT || 69990) 
+                        : plan.priceMonthlyBDT;
 
                   const monthlyEquivalent = billingCycle === 'yearly' 
                     ? Math.round(plan.priceYearlyBDT / 12) 
-                    : billingCycle === 'lifetime'
-                      ? Math.round((plan.priceLifetimeBDT || 69990) / 24)
-                      : plan.priceMonthlyBDT;
+                    : billingCycle === 'quarterly'
+                      ? Math.round(plan.priceQuarterlyBDT / 3)
+                      : billingCycle === 'lifetime'
+                        ? Math.round((plan.priceLifetimeBDT || 69990) / 24)
+                        : plan.priceMonthlyBDT;
 
                   return (
                     <div
                       key={plan.id}
                       className={`relative bg-white rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between border ${
                         plan.popular 
-                          ? 'border-amber-500 shadow-xl ring-2 ring-amber-400/50 -translate-y-1' 
+                          ? 'border-indigo-500 shadow-xl ring-2 ring-indigo-400/50 -translate-y-1' 
                           : 'border-stone-200 shadow-md hover:border-stone-300'
                       }`}
                     >
                       {plan.popular && (
-                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-[11px] font-black px-4 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1">
-                          <Crown className="w-3 h-3" />
+                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-indigo-800 text-white text-[11px] font-black px-4 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1">
+                          <Crown className="w-3 h-3 text-amber-400" />
                           {plan.badgeBn}
                         </div>
                       )}
@@ -387,12 +433,17 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
                               ৳{price.toLocaleString()}
                             </span>
                             <span className="text-xs text-stone-500 font-semibold">
-                              {billingCycle === 'yearly' ? '/বছর' : billingCycle === 'lifetime' ? 'এককালীন' : '/মাস'}
+                              {billingCycle === 'yearly' ? '/বছর' : billingCycle === 'quarterly' ? '/ত্রৈমাসিক (৩ মাস)' : billingCycle === 'lifetime' ? 'এককালীন' : '/মাস'}
                             </span>
                           </div>
+                          {billingCycle === 'quarterly' && (
+                            <p className="text-[11px] text-indigo-600 font-bold mt-1">
+                              (প্রতি মাসে মাত্র ৳{monthlyEquivalent.toLocaleString()} পড়বে)
+                            </p>
+                          )}
                           {billingCycle === 'yearly' && (
                             <p className="text-[11px] text-emerald-600 font-bold mt-1">
-                              (মাসিক মাত্র ৳{monthlyEquivalent.toLocaleString()} পড়বে)
+                              (প্রতি মাসে মাত্র ৳{monthlyEquivalent.toLocaleString()} পড়বে)
                             </p>
                           )}
                           {billingCycle === 'lifetime' && (
@@ -441,17 +492,25 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => handlePlanSelectAndGoToCheckout(plan.id)}
-                        className={`w-full py-3 px-4 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          plan.popular
-                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg shadow-amber-600/20 ring-1 ring-amber-400'
-                            : 'bg-stone-900 hover:bg-stone-800 text-white'
-                        }`}
-                      >
-                        <span>এই প্যাকেজটি কিনুন</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
+                      {/* Payment Action Buttons */}
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handlePlanSelectAndGoToStripe(plan.id)}
+                          className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-slate-900 hover:from-indigo-500 hover:to-slate-800 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <CreditCard className="w-4 h-4 text-emerald-400" />
+                          <span>স্ট্রাইপ / কার্ডে পে করুন (Instant)</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() => handlePlanSelectAndGoToCheckout(plan.id)}
+                          className="w-full py-2.5 px-4 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-stone-200"
+                        >
+                          <ShoppingBag className="w-3.5 h-3.5 text-stone-600" />
+                          <span>বিকাশ / নগদ / ব্যাংক ট্রান্সফার</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -483,6 +542,23 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
                   <div className="text-[11px] text-stone-500">সরাসরি ফোন ও হোয়াটসঅ্যাপ হেল্প</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: STRIPE CLOUD BILLING & SUBSCRIPTIONS */}
+          {activeTab === 'stripe' && (
+            <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+              <StripeBillingMockup
+                selectedPlan={currentPlan}
+                billingCycle={billingCycle}
+                onBillingCycleChange={(cycle) => setBillingCycle(cycle)}
+                onPlanChange={(planId) => setSelectedPlanId(planId)}
+                initialRestaurantName={checkoutData.restaurantName || simRestaurantName}
+                initialOwnerName={checkoutData.ownerName}
+                initialPhone={checkoutData.phone}
+                initialEmail={checkoutData.email}
+                lang={lang}
+              />
             </div>
           )}
 
@@ -860,15 +936,32 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
                       <div className="text-xs text-amber-800 font-bold">নির্বাচিত প্ল্যান:</div>
                       <div className="text-base font-black text-stone-900">{currentPlan.nameBn}</div>
                       <div className="text-[11px] text-amber-700">
-                        বিলিং: {billingCycle === 'yearly' ? 'বাৎসরিক (২০% ছাড়)' : billingCycle === 'lifetime' ? 'এককালীন লাইফটাইম' : 'মাসিক'}
+                        বিলিং: {billingCycle === 'yearly' ? 'বাৎসরিক (২০% ছাড়)' : billingCycle === 'quarterly' ? 'ত্রৈমাসিক (১০% ছাড় - ৩ মাস)' : billingCycle === 'lifetime' ? 'এককালীন লাইফটাইম' : 'মাসিক'}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-stone-500">পরিশোধযোগ্য মূল্য:</div>
                       <div className="text-2xl font-black text-amber-700">
-                        ৳{(billingCycle === 'yearly' ? currentPlan.priceYearlyBDT : billingCycle === 'lifetime' ? (currentPlan.priceLifetimeBDT || 69990) : currentPlan.priceMonthlyBDT).toLocaleString()}
+                        ৳{(billingCycle === 'yearly' ? currentPlan.priceYearlyBDT : billingCycle === 'quarterly' ? currentPlan.priceQuarterlyBDT : billingCycle === 'lifetime' ? (currentPlan.priceLifetimeBDT || 69990) : currentPlan.priceMonthlyBDT).toLocaleString()}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Switch to Stripe banner */}
+                  <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-indigo-600 shrink-0" />
+                      <div className="text-xs text-indigo-950 font-bold">
+                        ভিসা বা মাস্টারকার্ড দিয়ে অটোমেটিক পেমেন্ট করতে চান?
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('stripe')}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shrink-0 cursor-pointer shadow-xs"
+                    >
+                      স্ট্রাইপ গেটওয়ে খুলুন
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1187,7 +1280,7 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
                   </a>
 
                   <button
-                    onClick={() => openDirectWhatsApp(SAAS_CONTACT_INFO.salesWhatsApp, 'আসসালামু আলাইকুম, আমি হোটেল আল শেখ ফরিদ ফুড অর্ডারিং SaaS সফটওয়্যার ডেমো দেখতে আগ্রহী।')}
+                    onClick={() => openDirectCustomWhatsApp(SAAS_CONTACT_INFO.salesWhatsApp, 'আসসালামু আলাইকুম, আমি হোটেল আল শেখ ফরিদ ফুড অর্ডারিং SaaS সফটওয়্যার ডেমো দেখতে আগ্রহী।')}
                     className="px-4 py-2.5 rounded-xl bg-white text-stone-950 font-black text-xs flex items-center gap-2 hover:bg-amber-50 shadow-md cursor-pointer"
                   >
                     <MessageCircle className="w-4 h-4 text-emerald-600" />

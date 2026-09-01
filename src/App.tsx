@@ -23,7 +23,9 @@ import {
   Database,
   HardDrive,
   QrCode,
-  Share2
+  Share2,
+  FileDown,
+  Printer
 } from 'lucide-react';
 import { 
   FoodItem, 
@@ -38,7 +40,8 @@ import {
   Review,
   PointsHistoryItem,
   LoyaltyTier,
-  TableReservation
+  TableReservation,
+  ActiveTableSession
 } from './types';
 import { HOTEL_INFO, INITIAL_FOOD_ITEMS, INITIAL_USER, INITIAL_ORDERS, INITIAL_REVIEWS, INITIAL_RESERVATIONS } from './data/initialData';
 import { Header } from './components/Header';
@@ -56,6 +59,7 @@ import { ChatDrawer } from './components/ChatDrawer';
 import { EmailModal } from './components/EmailModal';
 import { UserAccountModal } from './components/UserAccountModal';
 import { TableBookingModal } from './components/TableBookingModal';
+import { TableQrScannerModal } from './components/TableQrScannerModal';
 import { LoyaltyLeaderboardModal } from './components/LoyaltyLeaderboardModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AiAssistantModal } from './components/AiAssistantModal';
@@ -70,6 +74,14 @@ import { OfflineCachedBanner } from './components/OfflineCachedBanner';
 import { PwaInstallBanner } from './components/PwaInstallBanner';
 import { AppShareAndInstallModal } from './components/AppShareAndInstallModal';
 import { SaaSMarketplaceModal } from './components/SaaSMarketplaceModal';
+import { SeasonalThemeSelectorModal } from './components/SeasonalThemeSelectorModal';
+import { PrintableDailyMenuModal } from './components/PrintableDailyMenuModal';
+import { 
+  SeasonalThemeId, 
+  SEASONAL_THEMES, 
+  getSavedSeasonalTheme, 
+  saveSeasonalTheme 
+} from './utils/seasonalTheme';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { 
   BkashSmsLetter, 
@@ -108,6 +120,14 @@ export default function App() {
   // State Management with LocalStorage resilience
   const [lang, setLang] = useState<'bn' | 'en'>('bn');
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isStaffMode, setIsStaffMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('al_sheikh_farid_staff_mode');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isGoogleSignedIn, setIsGoogleSignedIn] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
 
@@ -144,15 +164,23 @@ export default function App() {
   // UI Navigation & Modal States
   const [selectedCategory, setSelectedCategory] = useState<FoodCategory>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [seasonalTheme, setSeasonalTheme] = useState<SeasonalThemeId>(() => getSavedSeasonalTheme());
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [isTableBookingOpen, setIsTableBookingOpen] = useState<boolean>(false);
+  const [isTableQrScannerOpen, setIsTableQrScannerOpen] = useState<boolean>(false);
+  const [activeTableSession, setActiveTableSession] = useState<ActiveTableSession | null>(() => {
+    const saved = localStorage.getItem('al_sheikh_farid_table_session');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isEmailOpen, setIsEmailOpen] = useState<boolean>(false);
   const [isAiOpen, setIsAiOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isSaaSMarketplaceOpen, setIsSaaSMarketplaceOpen] = useState<boolean>(false);
+  const [isPrintMenuModalOpen, setIsPrintMenuModalOpen] = useState<boolean>(false);
   const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
 
   // Call States
@@ -629,6 +657,55 @@ export default function App() {
     );
   };
 
+  // Table QR Check-In & Active Table Session Handlers
+  const handleTableCheckIn = (session: ActiveTableSession) => {
+    setActiveTableSession(session);
+    localStorage.setItem('al_sheikh_farid_table_session', JSON.stringify(session));
+    if (session.reservationId) {
+      setReservations((prev) =>
+        prev.map((r) => (r.id === session.reservationId ? { ...r, status: 'checked_in' } : r))
+      );
+    }
+    SoundNotificationService.playQrScanSuccess();
+    sendSimulatedPushNotification(
+      {
+        id: `push-table-checkin-${Date.now()}`,
+        title: lang === 'bn' ? '📍 টেবিলে চেক-ইন সফল হয়েছে!' : '📍 Table Check-In Verified!',
+        body: lang === 'bn'
+          ? `${session.tableLabelBn}-এ আপনার সেশন শুরু হয়েছে। সরাসরি খাবার অর্ডার করুন!`
+          : `Active at ${session.tableLabelEn}. You can now order fresh meals straight to your table.`,
+        timestamp: 'এখন মাত্র',
+        statusText: lang === 'bn' ? 'চেক-ইন সম্পন্ন ✓' : 'Checked In ✓',
+      },
+      (payload) => {
+        setPushNotification(payload);
+      }
+    );
+  };
+
+  const handleOrderForTable = (tableNumber: string, session: ActiveTableSession) => {
+    handleTableCheckIn(session);
+    setIsCartOpen(true);
+  };
+
+  const handleClearTableSession = () => {
+    setActiveTableSession(null);
+    localStorage.removeItem('al_sheikh_farid_table_session');
+    SoundNotificationService.playNotificationChime();
+  };
+
+  // Staff Mode & Kitchen Management Toggle
+  const handleToggleStaffMode = () => {
+    setIsStaffMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('al_sheikh_farid_staff_mode', String(next));
+      if (next && !isAdmin) {
+        setIsAdmin(true); // Open admin dashboard automatically when staff mode is activated
+      }
+      return next;
+    });
+  };
+
   const handleUpdateFoodPrice = (foodId: string, newPrice: number) => {
     setFoodItems((prev) =>
       prev.map((f) => (f.id === foodId ? { ...f, price: newPrice } : f))
@@ -639,6 +716,33 @@ export default function App() {
     setFoodItems((prev) =>
       prev.map((f) => (f.id === foodId ? { ...f, inStock: !f.inStock } : f))
     );
+  };
+
+  // Seasonal Theme Selector Handler
+  const handleSelectSeasonalTheme = (themeId: SeasonalThemeId) => {
+    setSeasonalTheme(themeId);
+    saveSeasonalTheme(themeId);
+    SoundNotificationService.playNotificationChime();
+
+    const selectedThemeObj = SEASONAL_THEMES[themeId];
+    if (selectedThemeObj) {
+      sendSimulatedPushNotification(
+        {
+          id: `theme-changed-${Date.now()}`,
+          title: lang === 'bn' 
+            ? `🎨 ${selectedThemeObj.emoji} নতুন থিম সক্রিয়: ${selectedThemeObj.nameBn}` 
+            : `🎨 ${selectedThemeObj.emoji} Theme Activated: ${selectedThemeObj.nameEn}`,
+          body: lang === 'bn'
+            ? selectedThemeObj.taglineBn
+            : selectedThemeObj.taglineEn,
+          timestamp: 'এখন মাত্র',
+          statusText: lang === 'bn' ? 'থিম আপডেট সম্পন্ন ✓' : 'Theme Updated ✓',
+        },
+        (payload) => {
+          setPushNotification(payload);
+        }
+      );
+    }
   };
 
   // Voice Navigation Handlers
@@ -707,6 +811,8 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenTableBooking={() => setIsTableBookingOpen(true)}
+        onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
+        activeTableSession={activeTableSession}
         onOpenShareAndQr={() => setIsShareModalOpen(true)}
         onStartCall={handleStartCall}
         onOpenChat={() => setIsChatOpen(true)}
@@ -721,6 +827,8 @@ export default function App() {
         unreadSmsCount={activeBkashSms && !activeBkashSms.isVerified ? 1 : 0}
         isAdmin={isAdmin}
         onToggleAdmin={() => setIsAdmin(!isAdmin)}
+        isStaffMode={isStaffMode}
+        onToggleStaffMode={handleToggleStaffMode}
         lang={lang}
         onToggleLang={() => setLang(lang === 'bn' ? 'en' : 'bn')}
         user={user}
@@ -728,6 +836,8 @@ export default function App() {
         isCachedMode={isCachedMode}
         isSimulatedOffline={isSimulatedOffline}
         onToggleSimulatedOffline={toggleSimulatedOffline}
+        currentThemeId={seasonalTheme}
+        onOpenThemeModal={() => setIsThemeModalOpen(true)}
       />
 
       {/* Offline & Cached Mode Notification Banner */}
@@ -780,6 +890,8 @@ export default function App() {
             }}
             onOpenBkashSms={(ord) => handleOpenBkashSmsModal(ord)}
             onCloseAdmin={() => setIsAdmin(false)}
+            isStaffMode={isStaffMode}
+            onToggleStaffMode={handleToggleStaffMode}
             lang={lang}
           />
         )}
@@ -789,9 +901,13 @@ export default function App() {
           onQuickCategory={(cat) => setSelectedCategory(cat as FoodCategory)}
           onStartCall={handleStartCall}
           onOpenTableBooking={() => setIsTableBookingOpen(true)}
+          onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
+          activeTableSession={activeTableSession}
           onOpenShareAndQr={() => setIsShareModalOpen(true)}
           onOpenFoodGallery={handleScrollToGallery}
           onOpenSaaSMarketplace={() => setIsSaaSMarketplaceOpen(true)}
+          onOpenThemeModal={() => setIsThemeModalOpen(true)}
+          currentThemeId={seasonalTheme}
           lang={lang}
         />
 
@@ -898,7 +1014,7 @@ export default function App() {
 
         {/* Food Menu Catalog Grid */}
         <div id="food-menu-section" className="px-4 sm:px-6 lg:px-8 mt-6 scroll-mt-24">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h3 className="text-xl font-bold text-stone-900 font-serif">
@@ -916,6 +1032,24 @@ export default function App() {
                   ? `মোট ${filteredFoods.length}টি খাবার প্রদর্শিত হচ্ছে ${isCachedMode ? '• লোকাল ক্যাশ থেকে দ্রুত লোডকৃত' : '• স্টেশন এলাকায় দ্রুততম পার্সেল ও ডেলিভারি'}` 
                   : `Showing ${filteredFoods.length} meals ${isCachedMode ? '• Loaded from resilient local cache' : ''}`}
               </p>
+            </div>
+
+            {/* Download/Print Menu Button */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                id="download-print-menu-btn"
+                onClick={() => setIsPrintMenuModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-700 via-amber-800 to-orange-800 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-black shadow-md border border-amber-500/30 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] group"
+                title={lang === 'bn' ? 'দৈনিক খাবারের মেনু ডাউনলোড ও প্রিন্ট করুন' : 'Download or Print Daily Food Menu PDF'}
+              >
+                <div className="p-1 rounded-lg bg-black/25 text-amber-300 group-hover:rotate-6 transition-transform">
+                  <FileDown className="w-3.5 h-3.5" />
+                </div>
+                <span>{lang === 'bn' ? 'মেনু ডাউনলোড / প্রিন্ট' : 'Download / Print Menu'}</span>
+                <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-md text-[10px] bg-amber-400 text-stone-950 font-black">
+                  PDF
+                </span>
+              </button>
             </div>
           </div>
 
@@ -1179,6 +1313,8 @@ export default function App() {
         user={user}
         lang={lang}
         isCachedMode={isCachedMode}
+        activeTableSession={activeTableSession}
+        onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
       />
 
       <PaymentModal
@@ -1374,6 +1510,7 @@ export default function App() {
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenTableBooking={() => setIsTableBookingOpen(true)}
         onOpenShareAndQr={() => setIsShareModalOpen(true)}
+        onOpenPrintMenu={() => setIsPrintMenuModalOpen(true)}
         onStartCall={handleStartCall}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenEmail={() => setIsEmailOpen(true)}
@@ -1383,6 +1520,7 @@ export default function App() {
         onSearchFood={handleSearchFood}
         onToggleLang={() => setLang(lang === 'bn' ? 'en' : 'bn')}
         onToggleAdmin={() => setIsAdmin(!isAdmin)}
+        onToggleStaffMode={handleToggleStaffMode}
         lang={lang}
         isListeningExternal={isVoiceListening}
         onListeningChange={(listening) => setIsVoiceListening(listening)}
@@ -1399,6 +1537,23 @@ export default function App() {
       <SaaSMarketplaceModal
         isOpen={isSaaSMarketplaceOpen}
         onClose={() => setIsSaaSMarketplaceOpen(false)}
+        lang={lang}
+      />
+
+      {/* Seasonal & Festival Theme Selector Modal */}
+      <SeasonalThemeSelectorModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        currentThemeId={seasonalTheme}
+        onSelectTheme={handleSelectSeasonalTheme}
+        lang={lang}
+      />
+
+      {/* Printer-Friendly Walk-In Daily Menu Modal */}
+      <PrintableDailyMenuModal
+        isOpen={isPrintMenuModalOpen}
+        onClose={() => setIsPrintMenuModalOpen(false)}
+        foodItems={foodItems}
         lang={lang}
       />
     </div>
