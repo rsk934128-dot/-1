@@ -43,6 +43,7 @@ interface OrderSuccessModalProps {
   onAwardPoints?: (points: number, reasonBn: string) => void;
   user?: UserProfile;
   lang: 'bn' | 'en';
+  onOpenShopMap?: () => void;
 }
 
 export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
@@ -55,6 +56,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   onAwardPoints,
   user,
   lang,
+  onOpenShopMap,
 }) => {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -684,6 +686,34 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                 {order.paymentMethod} {order.transactionId ? `(TrxID: ${order.transactionId})` : ''} - {order.paymentStatus === 'paid' || order.paymentStatus === 'verified' ? (lang === 'bn' ? 'পরিশোধিত' : 'PAID') : (lang === 'bn' ? 'বাকি/ক্যাশ' : 'CASH DUE')}
               </span>
             </div>
+
+            {/* Self-Pickup Store Location Guidance */}
+            {order.orderType === 'parcel' && (
+              <div className="pt-2 mt-2 border-t border-amber-200 bg-amber-50 -mx-3.5 -mb-3.5 p-3 rounded-b-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                <div className="space-y-0.5">
+                  <span className="font-black text-amber-950 text-xs flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>{lang === 'bn' ? 'দোকানে এসে খাবার সংগ্রহের স্থান:' : 'Store Pickup Location:'}</span>
+                  </span>
+                  <p className="text-[11px] text-amber-800">
+                    {HOTEL_INFO.nameBn} - {HOTEL_INFO.locationBn} (রেলওয়ে স্টেশন মেইন গেট)
+                  </p>
+                </div>
+                {onOpenShopMap && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenShopMap();
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 shrink-0"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? '🗺️ দোকানের ম্যাপ দেখুন' : '🗺️ View Map'}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Items Table */}

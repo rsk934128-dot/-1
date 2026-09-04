@@ -27,12 +27,87 @@ import {
   Train,
   Wind,
   Compass,
-  FileCheck
+  FileCheck,
+  SlidersHorizontal,
+  Filter,
+  MapPin,
+  Check,
+  Crown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { ActiveTableSession, TableReservation, TableType, UserProfile } from '../types';
+import { ActiveTableSession, FoodCategory, TableReservation, TableType, UserProfile } from '../types';
 import { HOTEL_INFO } from '../data/initialData';
 import { SoundNotificationService } from '../services/soundNotificationService';
+
+export interface TableSpecialtyConfig {
+  category: FoodCategory;
+  titleBn: string;
+  titleEn: string;
+  descBn: string;
+  descEn: string;
+  badgeBn: string;
+  badgeEn: string;
+  recommendationBn: string;
+  recommendationEn: string;
+}
+
+export const TABLE_SPECIALTY_MAP: Record<TableType, TableSpecialtyConfig> = {
+  train_view: {
+    category: 'breakfast',
+    titleBn: 'ট্রেন ভিউ এক্সপ্রেস মেনু (নাস্তা, খিচুড়ি ও চা)',
+    titleEn: 'Train View Express Menu (Breakfast, Khichuri & Tea)',
+    descBn: 'ট্রেনের যাত্রীদের সময়ের গুরুত্ব দিয়ে ৩ মিনিটে পরিবেশনযোগ্য গরম ভুনা খিচুড়ি, ডিম ভুনা, পরোটা ও স্পেশাল মসলা চা।',
+    descEn: 'Piping hot 3-minute rail meals: aromatic bhuna khichuri, spiced egg bhuna, paratha & special tea.',
+    badgeBn: '🚆 ট্রেন ও প্ল্যাটফর্ম এক্সপ্রেস স্পেশাল',
+    badgeEn: '🚆 Train & Platform Express Special',
+    recommendationBn: 'ভুনা খিচুড়ি, ডিম ভুনা, পরোটা ও স্পেশাল চা',
+    recommendationEn: 'Bhuna Khichuri, Spiced Egg, Paratha & Tea',
+  },
+  vip_ac: {
+    category: 'fish_meat',
+    titleBn: 'ভিআইপি রাজকীয় ভোজ (কষা মাংস ও তাজা নদীর মাছ)',
+    titleEn: 'VIP Royal Feast (Spicy Beef Curry & River Fish)',
+    descBn: 'ভিআইপি এসি কেবিনের সম্মানিত অতিথিদের জন্য ঐতিহ্যবাহী কষা গরুর মাংস, দেশি মুরগি ও নদীর তাজা বড় রুই/কাতলা মাছ।',
+    descEn: 'Executive luxury dining featuring slow-cooked spicy beef, rich chicken curry & fresh river fish steaks.',
+    badgeBn: '👑 ভিআইপি স্পেশাল মাংস ও মাছ',
+    badgeEn: '👑 VIP Special Meat & Fish',
+    recommendationBn: 'কষা গরুর মাংস, নদীর রুই মাছের স্পেশাল পিস ও চিকেন কারি',
+    recommendationEn: 'Slow-Cooked Beef, Fresh River Rui Steaks & Chicken Curry',
+  },
+  family_cabin: {
+    category: 'lunch_dinner',
+    titleBn: 'পারিবারিক ভোজ মেনু (ভাত, খিচুড়ি ও ফ্যামিলি ডিল)',
+    titleEn: 'Family Cabin Feast (Steamed Rice, Khichuri & Platters)',
+    descBn: 'পর্দাযুক্ত পারিবারিক পরিবেশে সকলে একসাথে খাওয়ার জন্য বড় বাটির ধোঁয়া ওঠা সাদা ভাত, ঘন ডাল, ভর্তা ও গরুর মাংস।',
+    descEn: 'Private family dining with generous portions of steamed rice, thick dal, assorted vortas & beef.',
+    badgeBn: '👨‍👩‍👧‍👦 ফ্যামিলি কেবিন স্পেশাল',
+    badgeEn: '👨‍👩‍👧‍👦 Family Cabin Special',
+    recommendationBn: 'সাদা ভাত, পারিবারিক খিচুড়ি সেট, ঘন মুগ-মসুর ডাল ও কষা মাংস',
+    recommendationEn: 'Fluffy White Rice, Family Khichuri Sets & Thick Dal',
+  },
+  rooftop: {
+    category: 'sweets_snacks',
+    titleBn: 'রুফটপ স্পেশাল (খাঁটি জিলাপি, নাস্তা ও চা)',
+    titleEn: 'Rooftop Special (Crispy Hot Jilapi, Snacks & Tea)',
+    descBn: 'খোলা ছাদে স্টেশন রোডের দৃশ্যের সাথে গরম কড়াইয়ের রসালো জিলাপি, মুচমুচে সিঙ্গারা, সমুচা ও স্পেশাল দুধ চা।',
+    descEn: 'Open terrace ambience paired with hot syrupy jilapi, crispy snacks and rich milk tea.',
+    badgeBn: '🌆 রুফটপ জিলাপি ও বিকেলের নাস্তা',
+    badgeEn: '🌆 Rooftop Jilapi & Evening Snacks',
+    recommendationBn: 'গরম রসালো জিলাপি (১৬০ ৳), সিঙ্গারা, সমুচা ও স্পেশাল চা',
+    recommendationEn: 'Hot Crispy Jilapi (160 ৳), Singara, Samucha & Spiced Tea',
+  },
+  standard: {
+    category: 'lunch_dinner',
+    titleBn: 'প্রধান ডাইনিং সুস্বাদু খাবার (ভাত, ডাল ও মাছ-মাংস)',
+    titleEn: 'Main Dining Everyday Meals (Rice, Dal & Curries)',
+    descBn: 'হোটেল আল শেখ ফরিদের নিয়মিত ডাইনিং হলের প্রতিদিনের তাজা ভাত, ডাল, রুই মাছ, ডিম ও মাংসের কম্বিনেশন।',
+    descEn: 'Hearty everyday homestyle meals with fresh rice, lentil dal, river fish and hearty curries.',
+    badgeBn: '🍽️ প্রধান ডাইনিং প্রতিদিনের খাবার',
+    badgeEn: '🍽️ Main Dining Everyday Meals',
+    recommendationBn: 'ধোঁয়া ওঠা ভাত, রুই মাছের ঝোল, ডিম ভুনা ও সবজি ডাল',
+    recommendationEn: 'Steamed Rice, Fresh Rui Curry, Egg Bhuna & Mixed Dal',
+  },
+};
 
 interface TableQrScannerModalProps {
   isOpen: boolean;
@@ -44,6 +119,8 @@ interface TableQrScannerModalProps {
   onUpdateReservationStatus?: (reservationId: string, status: 'checked_in' | 'seated') => void;
   user: UserProfile;
   lang: 'bn' | 'en';
+  onFilterMenuByTable?: (category: FoodCategory, tableSession?: ActiveTableSession) => void;
+  onClearTableSession?: () => void;
 }
 
 // Preset Hotel Tables for Table QR Generation & Simulator
@@ -141,6 +218,8 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
   onUpdateReservationStatus,
   user,
   lang,
+  onFilterMenuByTable,
+  onClearTableSession,
 }) => {
   const [activeTab, setActiveTab] = useState<'camera' | 'upload' | 'tables_qr'>('camera');
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -149,6 +228,7 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [hasTorch, setHasTorch] = useState<boolean>(false);
   const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
+  const [autoFilterMenu, setAutoFilterMenu] = useState<boolean>(true);
 
   // Scanned result state
   const [scannedTable, setScannedTable] = useState<ActiveTableSession | null>(null);
@@ -404,6 +484,22 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
         (r.tableType === tableType && r.status === 'confirmed')
     );
 
+    const specialtyConfig = TABLE_SPECIALTY_MAP[tableType] || TABLE_SPECIALTY_MAP.standard;
+    const locationZoneBn = catalogMatch?.zoneBn || (
+      tableType === 'train_view' ? '১ম তলা উত্তর/পূর্ব জানালা - রেলওয়ে প্ল্যাটফর্ম ভিউ' :
+      tableType === 'vip_ac' ? 'ভিআইপি এসি লাউঞ্জ - শান্ত ও নিরিবিলি কেবিন' :
+      tableType === 'family_cabin' ? 'পারিবারিক ডাইনিং কর্নার - পর্দাযুক্ত প্রাইভেসি' :
+      tableType === 'rooftop' ? 'রুফটপ ওপেন এয়ার টেরেস - স্টেশন রোড ভিউ' :
+      'মেইন ডাইনিং হল - কাউন্টার সংলগ্ন'
+    );
+    const locationZoneEn = catalogMatch?.zoneEn || (
+      tableType === 'train_view' ? '1st Floor Window - Railway Platform Vista' :
+      tableType === 'vip_ac' ? 'VIP AC Lounge - Private Executive Suite' :
+      tableType === 'family_cabin' ? 'Family Dining Corner - Traditional Privacy' :
+      tableType === 'rooftop' ? 'Rooftop Open Terrace - Station Road View' :
+      'Main Dining Hall - Near Cashier'
+    );
+
     const session: ActiveTableSession = {
       tableNumber,
       tableLabelBn,
@@ -417,6 +513,11 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
       guestCount: matchedRes?.guestCount || catalogMatch?.seats || 4,
       reservationId: matchedRes?.id || reservationId,
       source: 'camera_qr',
+      locationZoneBn,
+      locationZoneEn,
+      specialtyCategory: specialtyConfig.category,
+      specialtyTitleBn: specialtyConfig.titleBn,
+      specialtyTitleEn: specialtyConfig.titleEn,
     };
 
     // Play high-tech scanner beep & confetti
@@ -500,14 +601,26 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
   const handleConfirmCheckInOnly = () => {
     if (!scannedTable) return;
     onTableCheckIn(scannedTable);
+    if (autoFilterMenu && scannedTable.specialtyCategory && onFilterMenuByTable) {
+      onFilterMenuByTable(scannedTable.specialtyCategory, scannedTable);
+    }
     onClose();
   };
 
   const handleStartOrderingForTable = () => {
     if (!scannedTable) return;
     onTableCheckIn(scannedTable);
+    if (autoFilterMenu && scannedTable.specialtyCategory && onFilterMenuByTable) {
+      onFilterMenuByTable(scannedTable.specialtyCategory, scannedTable);
+    }
     onOrderForTable(scannedTable.tableNumber, scannedTable.tableLabelBn, scannedTable.tableType);
     onClose();
+    setTimeout(() => {
+      const menuSection = document.getElementById('food-menu-section');
+      if (menuSection) {
+        menuSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
   };
 
   const handleCallWaiter = () => {
@@ -615,6 +728,106 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
 
         {/* Modal Main Content */}
         <div className="p-4 sm:p-5 space-y-4 max-h-[72vh] overflow-y-auto">
+          {/* ACTIVE TABLE SESSION HERO CARD (WHEN SESSION IS ALREADY ACTIVE) */}
+          {activeTableSession && !scannedTable && (
+            <div className="p-4 rounded-3xl bg-gradient-to-br from-amber-950/70 via-stone-900 to-stone-950 border-2 border-amber-500/50 shadow-xl space-y-3 animate-in fade-in">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500 text-stone-950 flex items-center justify-center font-black shadow-md shadow-amber-500/30 shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-black text-white">
+                        {lang === 'bn' ? activeTableSession.tableLabelBn : activeTableSession.tableLabelEn}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                        {lang === 'bn' ? '● সেশন সক্রিয়' : '● Session Active'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      {lang === 'bn' 
+                        ? `লোকেশন: ${activeTableSession.locationZoneBn || 'প্রধান ডাইনিং হল'} • চেক-ইন: ${activeTableSession.checkInTime}`
+                        : `Location: ${activeTableSession.locationZoneEn || 'Main Dining'} • In: ${activeTableSession.checkInTime}`}
+                    </p>
+                  </div>
+                </div>
+                {onClearTableSession && (
+                  <button
+                    type="button"
+                    onClick={onClearTableSession}
+                    className="px-2.5 py-1 rounded-xl bg-red-950/90 hover:bg-red-900 border border-red-500/40 text-red-300 text-[10px] font-bold transition-all cursor-pointer shrink-0"
+                    title={lang === 'bn' ? 'টেবিল সেশন সমাপ্ত করুন' : 'End table session'}
+                  >
+                    {lang === 'bn' ? 'চেক-আউট' : 'Check-Out'}
+                  </button>
+                )}
+              </div>
+
+              {/* Table Specialty Preference Active Banner */}
+              {activeTableSession.specialtyCategory && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="text-xs font-bold text-amber-200">
+                        {lang === 'bn' ? 'টেবিলের লোকেশন অনুযায়ী স্পেশাল মেনু ফিল্টার' : 'Table Specialty Preference Filter'}
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-stone-950">
+                      {activeTableSession.specialtyCategory === 'breakfast'
+                        ? (lang === 'bn' ? 'সকালের নাস্তা ও চা' : 'Breakfast & Tea')
+                        : activeTableSession.specialtyCategory === 'fish_meat'
+                        ? (lang === 'bn' ? 'মাংস ও নদীর মাছ' : 'Meat & Fish')
+                        : activeTableSession.specialtyCategory === 'sweets_snacks'
+                        ? (lang === 'bn' ? 'জিলাপি ও নাস্তা' : 'Jilapi & Snacks')
+                        : (lang === 'bn' ? 'ভাত, খিচুড়ি ও ডাল' : 'Rice & Khichuri')}
+                    </span>
+                  </div>
+                  <h5 className="text-xs font-bold text-white">
+                    {lang === 'bn' ? activeTableSession.specialtyTitleBn : activeTableSession.specialtyTitleEn}
+                  </h5>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-500/20">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onFilterMenuByTable && activeTableSession.specialtyCategory) {
+                          onFilterMenuByTable(activeTableSession.specialtyCategory, activeTableSession);
+                        }
+                        onClose();
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+                    >
+                      <Filter className="w-3.5 h-3.5" />
+                      <span>{lang === 'bn' ? 'স্পেশাল ফিল্টারযুক্ত মেনু দেখুন' : 'View Filtered Menu'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onFilterMenuByTable) {
+                          onFilterMenuByTable('all', activeTableSession);
+                        }
+                        onClose();
+                      }}
+                      className="py-2 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      {lang === 'bn' ? 'সব খাবার দেখুন (রিসেট)' : 'View All Items'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCallWaiter}
+                      className="py-2 px-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <BellRing className="w-3 h-3 text-amber-400" />
+                      <span>{lang === 'bn' ? 'ওয়েটার' : 'Waiter'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* SUCCESS VIEW WHEN TABLE IS SCANNED */}
           {scannedTable ? (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -635,6 +848,72 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
                     </p>
                   </div>
                 </div>
+
+                {/* Table Location & Zone Details */}
+                <div className="p-3 rounded-2xl bg-stone-900/90 border border-stone-800 flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/30">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-stone-400 block font-semibold">
+                      {lang === 'bn' ? 'টেবিল লোকেশন ও পরিবেশ' : 'Table Location & Zone'}
+                    </span>
+                    <span className="font-bold text-stone-200 text-xs">
+                      {lang === 'bn' 
+                        ? (scannedTable.locationZoneBn || 'প্রধান ডাইনিং হল')
+                        : (scannedTable.locationZoneEn || 'Main Dining Hall')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Table Specialty Preference Card & Auto-Filter Control */}
+                {scannedTable.tableType && TABLE_SPECIALTY_MAP[scannedTable.tableType] && (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/20 via-orange-500/15 to-stone-900 border border-amber-500/50 space-y-2.5 shadow-md">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="text-xs font-black text-amber-200">
+                          {lang === 'bn' ? 'টেবিলের লোকেশন অনুযায়ী স্পেশাল মেনু' : 'Location Specialty Preference'}
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-stone-950 shadow-xs">
+                        {lang === 'bn'
+                          ? TABLE_SPECIALTY_MAP[scannedTable.tableType].badgeBn
+                          : TABLE_SPECIALTY_MAP[scannedTable.tableType].badgeEn}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h5 className="text-xs font-bold text-white">
+                        {lang === 'bn'
+                          ? TABLE_SPECIALTY_MAP[scannedTable.tableType].titleBn
+                          : TABLE_SPECIALTY_MAP[scannedTable.tableType].titleEn}
+                      </h5>
+                      <p className="text-[11px] text-stone-300 leading-relaxed mt-0.5">
+                        {lang === 'bn'
+                          ? TABLE_SPECIALTY_MAP[scannedTable.tableType].descBn
+                          : TABLE_SPECIALTY_MAP[scannedTable.tableType].descEn}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-amber-500/20">
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={autoFilterMenu}
+                          onChange={(e) => setAutoFilterMenu(e.target.checked)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                          {lang === 'bn'
+                            ? 'চেক-ইনের সাথে সাথে মূল খাবারের মেনু স্বয়ংক্রিয়ভাবে ফিল্টার করুন'
+                            : 'Auto-filter main food menu for this table upon check-in'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
 
                 {/* Table Quick Details Badge Row */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-stone-800 text-xs">
@@ -961,9 +1240,16 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
                             </h5>
                           </div>
                           <p className="text-[10px] text-stone-400 mt-0.5 line-clamp-1">{tbl.zoneBn}</p>
-                          <span className="inline-block text-[9px] text-amber-300 font-mono font-bold mt-1">
-                            ID: {tbl.id} • {tbl.seats} {lang === 'bn' ? 'আসন' : 'seats'}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            <span className="text-[9px] text-amber-300 font-mono font-bold">
+                              ID: {tbl.id} • {tbl.seats} {lang === 'bn' ? 'আসন' : 'seats'}
+                            </span>
+                            {TABLE_SPECIALTY_MAP[tbl.type] && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                {lang === 'bn' ? TABLE_SPECIALTY_MAP[tbl.type].badgeBn : TABLE_SPECIALTY_MAP[tbl.type].badgeEn}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1013,6 +1299,7 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        const spec = TABLE_SPECIALTY_MAP[res.tableType] || TABLE_SPECIALTY_MAP.standard;
                         const session: ActiveTableSession = {
                           tableNumber: res.tableNumber || 'টেবিল ১',
                           tableLabelBn: `${res.tableNumber || 'টেবিল ১'} (বুকিং: ${res.id})`,
@@ -1026,6 +1313,19 @@ export const TableQrScannerModal: React.FC<TableQrScannerModalProps> = ({
                           guestCount: res.guestCount,
                           reservationId: res.id,
                           source: 'reservation_sync',
+                          locationZoneBn: res.tableType === 'train_view' ? '১ম তলা উত্তর/পূর্ব জানালা - রেলওয়ে প্ল্যাটফর্ম ভিউ' :
+                            res.tableType === 'vip_ac' ? 'ভিআইপি এসি লাউঞ্জ - শান্ত ও নিরিবিলি কেবিন' :
+                            res.tableType === 'family_cabin' ? 'পারিবারিক ডাইনিং কর্নার - পর্দাযুক্ত প্রাইভেসি' :
+                            res.tableType === 'rooftop' ? 'রুফটপ ওপেন এয়ার টেরেস - স্টেশন রোড ভিউ' :
+                            'মেইন ডাইনিং হল - কাউন্টার সংলগ্ন',
+                          locationZoneEn: res.tableType === 'train_view' ? '1st Floor Window - Railway Platform Vista' :
+                            res.tableType === 'vip_ac' ? 'VIP AC Lounge - Private Executive Suite' :
+                            res.tableType === 'family_cabin' ? 'Family Dining Corner - Traditional Privacy' :
+                            res.tableType === 'rooftop' ? 'Rooftop Open Terrace - Station Road View' :
+                            'Main Dining Hall - Near Cashier',
+                          specialtyCategory: spec.category,
+                          specialtyTitleBn: spec.titleBn,
+                          specialtyTitleEn: spec.titleEn,
                         };
                         setScannedTable(session);
                         setMatchedReservation(res);

@@ -132,6 +132,7 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
   isOpen,
   onClose,
   onConfirmBooking,
+  onOpenTableQrScanner,
   user,
   lang,
 }) => {

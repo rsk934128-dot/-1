@@ -20,7 +20,11 @@ import {
   Check,
   ScanLine,
   CheckCircle2,
-  QrCode
+  QrCode,
+  Store,
+  Footprints,
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import { ActiveTableSession, CartItem, OrderType, UserProfile } from '../types';
 import { VoiceSpecialNoteInput } from './VoiceSpecialNoteInput';
@@ -52,6 +56,7 @@ interface CartDrawerProps {
   isCachedMode?: boolean;
   activeTableSession?: ActiveTableSession | null;
   onOpenTableQrScanner?: () => void;
+  onOpenShopMap?: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -66,8 +71,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   isCachedMode = false,
   activeTableSession,
   onOpenTableQrScanner,
+  onOpenShopMap,
 }) => {
-  const [orderType, setOrderType] = useState<OrderType>(activeTableSession ? 'dine_in' : 'delivery');
+  const [orderType, setOrderType] = useState<OrderType>(activeTableSession ? 'dine_in' : 'parcel');
   const [tableNumber, setTableNumber] = useState<string>(activeTableSession?.tableNumber || 'টেবিল ১');
   const [deliveryAddress, setDeliveryAddress] = useState<string>(user.address || 'স্টেশন রোড, রেলস্টেশন এলাকা');
   const [customerName, setCustomerName] = useState<string>(user.name || '');
@@ -268,55 +274,130 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   })}
                 </div>
 
-                {/* Order Type Selector */}
+                {/* Order Type Selector with Self-Pickup Focus */}
                 <div className="pt-3 border-t border-stone-200">
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-600 block mb-2">
-                    {lang === 'bn' ? 'অর্ডারের ধরন নির্বাচন করুন' : 'Order Type'}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOrderType('delivery')}
-                      className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
-                        orderType === 'delivery'
-                          ? 'bg-amber-50 border-amber-600 text-amber-950 font-bold ring-1 ring-amber-600'
-                          : 'bg-stone-50 border-stone-200 text-stone-700'
-                      }`}
-                    >
-                      <Bike className="w-4 h-4 text-amber-600" />
-                      <span className="text-[11px]">{lang === 'bn' ? 'ডেলিভারি' : 'Delivery'}</span>
-                    </button>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-stone-700 block">
+                      {lang === 'bn' ? 'খাবার গ্রহণের মাধ্যম নির্বাচন করুন' : 'Order Fulfillment Method'}
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      {lang === 'bn' ? 'দোকানে এসে সংগ্রহ (Self-Pickup)' : 'Self-Pickup Active'}
+                    </span>
+                  </div>
 
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* 1. Parcel / Self-Pickup (Primary Active Choice) */}
                     <button
                       type="button"
                       onClick={() => setOrderType('parcel')}
-                      className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
+                      className={`relative p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
                         orderType === 'parcel'
-                          ? 'bg-amber-50 border-amber-600 text-amber-950 font-bold ring-1 ring-amber-600'
-                          : 'bg-stone-50 border-stone-200 text-stone-700'
+                          ? 'bg-amber-50 border-amber-600 text-amber-950 font-bold ring-2 ring-amber-500 shadow-xs'
+                          : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
                       }`}
                     >
-                      <Package className="w-4 h-4 text-amber-600" />
-                      <span className="text-[11px]">{lang === 'bn' ? 'পার্সেল' : 'Parcel'}</span>
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full whitespace-nowrap shadow-2xs">
+                        {lang === 'bn' ? 'পিক-আপ' : 'Pickup'}
+                      </span>
+                      <Package className="w-4 h-4 text-amber-600 mt-1" />
+                      <span className="text-[11px] leading-tight font-black">{lang === 'bn' ? 'দোকান থেকে সংগ্রহ' : 'Self-Pickup'}</span>
                     </button>
 
+                    {/* 2. Dine In */}
                     <button
                       type="button"
                       onClick={() => setOrderType('dine_in')}
-                      className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
+                      className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
                         orderType === 'dine_in'
-                          ? 'bg-amber-50 border-amber-600 text-amber-950 font-bold ring-1 ring-amber-600'
-                          : 'bg-stone-50 border-stone-200 text-stone-700'
+                          ? 'bg-amber-50 border-amber-600 text-amber-950 font-bold ring-2 ring-amber-500 shadow-xs'
+                          : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
                       }`}
                     >
                       <Utensils className="w-4 h-4 text-amber-600" />
-                      <span className="text-[11px]">{lang === 'bn' ? 'হোটেলে খাওয়া' : 'Dine In'}</span>
+                      <span className="text-[11px] leading-tight">{lang === 'bn' ? 'হোটেলে খাওয়া' : 'Dine In'}</span>
+                    </button>
+
+                    {/* 3. Delivery (Coming Soon Notice) */}
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('delivery')}
+                      className={`relative p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
+                        orderType === 'delivery'
+                          ? 'bg-blue-50 border-blue-500 text-blue-950 font-bold ring-2 ring-blue-400 shadow-xs'
+                          : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100'
+                      }`}
+                    >
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-stone-500 text-white text-[8px] font-bold px-1.5 py-0.2 rounded-full whitespace-nowrap">
+                        {lang === 'bn' ? 'শীঘ্রই' : 'Soon'}
+                      </span>
+                      <Bike className="w-4 h-4 text-stone-500 mt-1" />
+                      <span className="text-[11px] leading-tight">{lang === 'bn' ? 'হোম ডেলিভারি' : 'Delivery'}</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Conditional Fields based on Order Type */}
+                {/* Conditional Fields & Pick-up Info based on Order Type */}
                 <div className="space-y-3 pt-2">
+                  {/* Notice for Parcel / Self-Pickup */}
+                  {orderType === 'parcel' && (
+                    <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-300 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2">
+                          <Store className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-xs font-bold text-amber-950 block">
+                              {lang === 'bn' ? 'দোকান থেকে পার্সেল সংগ্রহ (Self-Pickup)' : 'Store Counter Pickup'}
+                            </span>
+                            <span className="text-[11px] text-amber-800 leading-tight block mt-0.5">
+                              {lang === 'bn' ? 'হোটেল আল শেখ ফরিদ - রেলওয়ে স্টেশন মেইন গেট সংলগ্ন' : 'Hotel Al Sheikh Farid - Near Station Main Gate'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {onOpenShopMap && (
+                          <button
+                            type="button"
+                            onClick={onOpenShopMap}
+                            className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black flex items-center gap-1 shrink-0 transition-colors shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <MapPin className="w-3 h-3" />
+                            <span>{lang === 'bn' ? 'ম্যাপ দেখুন' : 'View Map'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="bg-white/80 p-2 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed">
+                        <p>
+                          ⏱️ <strong>{lang === 'bn' ? 'খাবার প্রস্তুতির সময়:' : 'Prep Time:'}</strong> {lang === 'bn' ? '১০-১৫ মিনিটের মধ্যে গরম খাবার প্যাকেট করে রাখা হবে। কাউন্টারে এসে নাম বা অর্ডার আইডি বললেই খাবার পেয়ে যাবেন।' : 'Ready within 10-15 mins. Mention your order ID at counter to collect.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notice for Delivery (Inform that it's currently self-pickup) */}
+                  {orderType === 'delivery' && (
+                    <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 text-xs text-blue-900 space-y-2">
+                      <div className="flex items-center gap-2 font-bold text-blue-950">
+                        <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span>{lang === 'bn' ? 'হোম ডেলিভারি সাময়িক স্থগিত:' : 'Home Delivery Notice:'}</span>
+                      </div>
+                      <p className="text-[11px] text-blue-800 leading-relaxed">
+                        {lang === 'bn'
+                          ? 'বর্তমানে গ্রাহকদের দোকানে এসে খাবার নিয়ে যেতে হবে। তবে আপনার সুবিধার্থে আপনি অগ্রিম অর্ডার করে রাখতে পারেন যাতে পৌঁছানো মাত্র গরম খাবার প্রস্তুত পান। পরবর্তীতে হোম ডেলিভারি ব্যবস্থা চালু করা হবে।'
+                          : 'Currently orders are for self-pickup at our shop. Dedicated home delivery will be arranged later.'}
+                      </p>
+                      {onOpenShopMap && (
+                        <button
+                          type="button"
+                          onClick={onOpenShopMap}
+                          className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          <span>{lang === 'bn' ? 'দোকানের ম্যাপ ও রুট দেখুন' : 'View Shop Map & Route'}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {orderType === 'dine_in' && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">

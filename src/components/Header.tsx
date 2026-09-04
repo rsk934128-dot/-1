@@ -27,11 +27,14 @@ import {
   Palette,
   ChefHat,
   Flame,
-  ScanLine
+  ScanLine,
+  Radio,
+  BatteryLow
 } from 'lucide-react';
 import { HOTEL_INFO } from '../data/initialData';
 import { ActiveTableSession, UserProfile } from '../types';
 import { SeasonalThemeId, SEASONAL_THEMES } from '../utils/seasonalTheme';
+import { BackgroundSyncService } from '../services/backgroundSyncService';
 
 interface HeaderProps {
   cartCount: number;
@@ -40,6 +43,8 @@ interface HeaderProps {
   onOpenTableBooking?: () => void;
   onOpenTableQrScanner?: () => void;
   activeTableSession?: ActiveTableSession | null;
+  onOpenShopLocationMap?: () => void;
+  onOpenBackgroundSync?: () => void;
   onOpenShareAndQr?: () => void;
   onOpenSaaSMarketplace?: () => void;
   onStartCall: (type: 'audio' | 'video') => void;
@@ -74,6 +79,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTableBooking,
   onOpenTableQrScanner,
   activeTableSession,
+  onOpenShopLocationMap,
+  onOpenBackgroundSync,
   onOpenShareAndQr,
   onOpenSaaSMarketplace,
   onStartCall,
@@ -101,17 +108,39 @@ export const Header: React.FC<HeaderProps> = ({
   currentThemeId = 'classic',
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [isLowPower, setIsLowPower] = React.useState<boolean>(() => BackgroundSyncService.getState().isLowPowerMode);
   const currentTheme = SEASONAL_THEMES[currentThemeId] || SEASONAL_THEMES.classic;
+
+  React.useEffect(() => {
+    const unsub = BackgroundSyncService.subscribe(st => setIsLowPower(st.isLowPowerMode));
+    return () => unsub();
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs transition-colors duration-300">
       {/* Top Notice Bar with Seasonal Festival Theme Gradient */}
       <div className={`bg-gradient-to-r ${currentTheme.topNoticeGradient} text-white text-xs px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 transition-all duration-500 shadow-inner`}>
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          <span className="flex items-center gap-1.5 font-medium">
-            <MapPin className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-            <span>{lang === 'bn' ? HOTEL_INFO.locationBn : HOTEL_INFO.locationEn}</span>
-          </span>
+          {onOpenShopLocationMap ? (
+            <button
+              onClick={onOpenShopLocationMap}
+              className="flex items-center gap-1.5 font-medium hover:text-amber-200 transition-colors cursor-pointer group text-left"
+              title={lang === 'bn' ? 'দোকানের অবস্থান ও ম্যাপ দেখুন' : 'View Shop Location & Map'}
+            >
+              <MapPin className="w-3.5 h-3.5 text-amber-300 shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="underline decoration-amber-300/40 decoration-dashed underline-offset-2">
+                {lang === 'bn' ? HOTEL_INFO.locationBn : HOTEL_INFO.locationEn}
+              </span>
+              <span className="hidden sm:inline-block bg-white/20 hover:bg-white/30 px-1.5 py-0.2 rounded text-[10px] font-bold text-amber-100 ml-1">
+                {lang === 'bn' ? '🗺️ ম্যাপ' : '🗺️ Map'}
+              </span>
+            </button>
+          ) : (
+            <span className="flex items-center gap-1.5 font-medium">
+              <MapPin className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              <span>{lang === 'bn' ? HOTEL_INFO.locationBn : HOTEL_INFO.locationEn}</span>
+            </span>
+          )}
           <span className="hidden sm:flex items-center gap-1.5 text-white/90">
             <Clock className="w-3.5 h-3.5 shrink-0 text-amber-300" />
             <span>{lang === 'bn' ? HOTEL_INFO.openingHoursBn : HOTEL_INFO.openingHoursEn}</span>
@@ -172,6 +201,34 @@ export const Header: React.FC<HeaderProps> = ({
                   : (lang === 'bn' ? '📷 টেবিল কিউআর' : '📷 Table QR')}
               </span>
               {activeTableSession && <span className="w-1.5 h-1.5 rounded-full bg-stone-950"></span>}
+            </button>
+          )}
+
+          {/* Real-time Background Sync & Always Active Pill in Top Bar */}
+          {onOpenBackgroundSync && (
+            <button
+              id="header-background-sync-pill"
+              onClick={onOpenBackgroundSync}
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black border shadow-xs cursor-pointer active:scale-95 transition-all ${
+                isLowPower
+                  ? 'bg-amber-600 hover:bg-amber-500 text-amber-100 border-amber-300/60 ring-1 ring-amber-300/30'
+                  : 'bg-emerald-600/90 hover:bg-emerald-500 text-white border-emerald-400/50'
+              }`}
+              title={lang === 'bn' ? (isLowPower ? 'লো পাওয়ার মোড সক্রিয় (ব্যাটারি সেভার)' : 'অলওয়েজ একটিভ ও রিয়েল-টাইম ব্যাকগ্রাউন্ড সিঙ্ক সেটিংস') : (isLowPower ? 'Low Power Mode Active' : 'Always Active & Background Sync Settings')}
+            >
+              {isLowPower ? (
+                <>
+                  <BatteryLow className="w-3 h-3 text-amber-200 animate-pulse" />
+                  <span>{lang === 'bn' ? 'পাওয়ার সেভার' : 'Low Power'}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                </>
+              ) : (
+                <>
+                  <Radio className="w-3 h-3 text-emerald-300 animate-pulse" />
+                  <span>{lang === 'bn' ? 'লাইভ একটিভ' : 'Live Active'}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
+                </>
+              )}
             </button>
           )}
 
@@ -305,6 +362,19 @@ export const Header: React.FC<HeaderProps> = ({
                     {unreadSmsCount}
                   </span>
                 )}
+              </button>
+            )}
+
+            {/* Shop Location Map Desktop Button */}
+            {onOpenShopLocationMap && (
+              <button
+                id="desktop-shop-location-map-btn"
+                onClick={onOpenShopLocationMap}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 shadow-xs transition-all cursor-pointer ring-1 ring-amber-400/80 active:scale-95"
+                title={lang === 'bn' ? 'দোকানের ম্যাপ, লোকেশন ও সেলফ পিক-আপ গাইড' : 'View Shop Location, Map & Directions'}
+              >
+                <MapPin className="w-3.5 h-3.5 text-stone-950 animate-bounce" />
+                <span>{lang === 'bn' ? '🗺️ দোকানের ম্যাপ' : '🗺️ Shop Map'}</span>
               </button>
             )}
 
@@ -569,6 +639,20 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Mobile Shop Location Map Button */}
+            {onOpenShopLocationMap && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenShopLocationMap();
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-amber-500 text-stone-950 border border-amber-400 text-xs font-black shadow-xs active:scale-95"
+              >
+                <MapPin className="w-4 h-4 text-stone-950 animate-bounce" />
+                <span>{lang === 'bn' ? '🗺️ দোকানের ম্যাপ' : '🗺️ Shop Map'}</span>
+              </button>
+            )}
+
             {onOpenTableBooking && (
               <button
                 onClick={() => {
@@ -601,6 +685,33 @@ export const Header: React.FC<HeaderProps> = ({
                     ? (lang === 'bn' ? `📍 ${activeTableSession.tableNumber}` : `📍 ${activeTableSession.tableNumber}`)
                     : (lang === 'bn' ? '📷 টেবিল QR স্ক্যান' : '📷 Table QR')}
                 </span>
+              </button>
+            )}
+
+            {/* Mobile Background Sync & Always Active Button */}
+            {onOpenBackgroundSync && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenBackgroundSync();
+                }}
+                className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-black shadow-xs active:scale-95 transition-all ${
+                  isLowPower
+                    ? 'bg-amber-950/90 border-amber-500/60 text-amber-300'
+                    : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                }`}
+              >
+                {isLowPower ? (
+                  <>
+                    <BatteryLow className="w-4 h-4 text-amber-400 animate-pulse" />
+                    <span>{lang === 'bn' ? '🪫 লো পাওয়ার মোড সক্রিয়' : '🪫 Low Power Mode Active'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span>{lang === 'bn' ? '⚡ অলওয়েজ একটিভ সিঙ্ক' : '⚡ Always Active'}</span>
+                  </>
+                )}
               </button>
             )}
 

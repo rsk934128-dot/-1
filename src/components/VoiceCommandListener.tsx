@@ -33,6 +33,8 @@ export interface VoiceCommandListenerProps {
   onOpenCart: () => void;
   onOpenAccount: () => void;
   onOpenTableBooking?: () => void;
+  onOpenTableQrScanner?: () => void;
+  onOpenBackgroundSync?: () => void;
   onOpenShareAndQr?: () => void;
   onOpenPrintMenu?: () => void;
   onStartCall: (type: 'audio' | 'video') => void;
@@ -66,6 +68,8 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
   onOpenCart,
   onOpenAccount,
   onOpenTableBooking,
+  onOpenTableQrScanner,
+  onOpenBackgroundSync,
   onOpenShareAndQr,
   onOpenPrintMenu,
   onStartCall,
@@ -205,6 +209,38 @@ export const VoiceCommandListener: React.FC<VoiceCommandListenerProps> = ({
       },
       confirmVoiceBn: 'টেবিল বুকিং ও সিট রিজার্ভেশন ফরম খোলা হয়েছে',
       confirmVoiceEn: 'Opening table booking form',
+    },
+    {
+      id: 'scan_table_qr',
+      icon: <QrCode className="w-4 h-4 text-amber-400" />,
+      labelBn: 'টেবিল কিউআর স্ক্যান করুন',
+      labelEn: 'Scan Table QR Code',
+      keywordsBn: ['টেবিল কিউআর', 'কিউআর স্ক্যান', 'টেবিল স্ক্যান', 'কিউআর কোড স্ক্যান', 'কিউআর স্ক্যানার', 'টেবিল কোড'],
+      keywordsEn: ['scan table', 'table qr', 'scan qr', 'table scan', 'scan code', 'qr scanner'],
+      action: () => {
+        if (onOpenTableQrScanner) {
+          onOpenTableQrScanner();
+        } else if (onOpenTableBooking) {
+          onOpenTableBooking();
+        }
+      },
+      confirmVoiceBn: 'টেবিল কিউআর কোড স্ক্যানার চালু করা হয়েছে',
+      confirmVoiceEn: 'Launching table QR camera scanner',
+    },
+    {
+      id: 'background_sync',
+      icon: <Radio className="w-4 h-4 text-emerald-400" />,
+      labelBn: 'অলওয়েজ একটিভ ও ব্যাকগ্রাউন্ড সিঙ্ক',
+      labelEn: 'Always Active & Background Sync',
+      keywordsBn: ['ব্যাকগ্রাউন্ড', 'সিঙ্ক', 'অলওয়েজ একটিভ', 'নোটিফিকেশন সেটিংস', 'একটিভ রাখুন', 'রিয়েল টাইম'],
+      keywordsEn: ['background sync', 'always active', 'notifications', 'background', 'sync', 'real time'],
+      action: () => {
+        if (onOpenBackgroundSync) {
+          onOpenBackgroundSync();
+        }
+      },
+      confirmVoiceBn: 'অলওয়েজ একটিভ ও ব্যাকগ্রাউন্ড সিঙ্ক চালু করা হয়েছে',
+      confirmVoiceEn: 'Opening always active and background sync center',
     },
     {
       id: 'go_to_menu',

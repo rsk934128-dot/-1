@@ -195,6 +195,11 @@ export interface ActiveTableSession {
   guestCount?: number;
   reservationId?: string;
   source: 'camera_qr' | 'manual' | 'reservation_sync';
+  locationZoneBn?: string;
+  locationZoneEn?: string;
+  specialtyCategory?: FoodCategory;
+  specialtyTitleBn?: string;
+  specialtyTitleEn?: string;
 }
 
 export interface TableReservation {

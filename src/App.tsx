@@ -41,6 +41,7 @@ import {
   PointsHistoryItem,
   LoyaltyTier,
   TableReservation,
+  TableType,
   ActiveTableSession
 } from './types';
 import { HOTEL_INFO, INITIAL_FOOD_ITEMS, INITIAL_USER, INITIAL_ORDERS, INITIAL_REVIEWS, INITIAL_RESERVATIONS } from './data/initialData';
@@ -76,6 +77,12 @@ import { AppShareAndInstallModal } from './components/AppShareAndInstallModal';
 import { SaaSMarketplaceModal } from './components/SaaSMarketplaceModal';
 import { SeasonalThemeSelectorModal } from './components/SeasonalThemeSelectorModal';
 import { PrintableDailyMenuModal } from './components/PrintableDailyMenuModal';
+import { BackgroundSyncModal } from './components/BackgroundSyncModal';
+import { ShopLocationMapModal } from './components/ShopLocationMapModal';
+import { ShopLocationSection } from './components/ShopLocationSection';
+import { MobileNotificationPermissionBanner } from './components/MobileNotificationPermissionBanner';
+import { LowPowerModeBanner } from './components/LowPowerModeBanner';
+import { BackgroundSyncService } from './services/backgroundSyncService';
 import { 
   SeasonalThemeId, 
   SEASONAL_THEMES, 
@@ -162,7 +169,22 @@ export default function App() {
   });
 
   // UI Navigation & Modal States
-  const [selectedCategory, setSelectedCategory] = useState<FoodCategory>('all');
+  const [activeTableSession, setActiveTableSession] = useState<ActiveTableSession | null>(() => {
+    const saved = localStorage.getItem('al_sheikh_farid_table_session');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [selectedCategory, setSelectedCategory] = useState<FoodCategory>(() => {
+    const savedSession = localStorage.getItem('al_sheikh_farid_table_session');
+    if (savedSession) {
+      try {
+        const parsed: ActiveTableSession = JSON.parse(savedSession);
+        if (parsed.specialtyCategory) {
+          return parsed.specialtyCategory;
+        }
+      } catch {}
+    }
+    return 'all';
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [seasonalTheme, setSeasonalTheme] = useState<SeasonalThemeId>(() => getSavedSeasonalTheme());
   const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
@@ -171,16 +193,13 @@ export default function App() {
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [isTableBookingOpen, setIsTableBookingOpen] = useState<boolean>(false);
   const [isTableQrScannerOpen, setIsTableQrScannerOpen] = useState<boolean>(false);
-  const [activeTableSession, setActiveTableSession] = useState<ActiveTableSession | null>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_table_session');
-    return saved ? JSON.parse(saved) : null;
-  });
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isEmailOpen, setIsEmailOpen] = useState<boolean>(false);
   const [isAiOpen, setIsAiOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isSaaSMarketplaceOpen, setIsSaaSMarketplaceOpen] = useState<boolean>(false);
   const [isPrintMenuModalOpen, setIsPrintMenuModalOpen] = useState<boolean>(false);
+  const [isShopLocationMapOpen, setIsShopLocationMapOpen] = useState<boolean>(false);
   const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
 
   // Call States
@@ -209,6 +228,14 @@ export default function App() {
 
   // Push Notification Simulation State
   const [pushNotification, setPushNotification] = useState<PushNotificationPayload | null>(null);
+  const [isBackgroundSyncOpen, setIsBackgroundSyncOpen] = useState<boolean>(false);
+
+  // Hook up real-time background notification toast handler
+  useEffect(() => {
+    BackgroundSyncService.setInAppToastHandler((payload) => {
+      setPushNotification(payload);
+    });
+  }, []);
 
   // bKash SMS Notification Bar & Letter Verification State
   const [activeBkashSms, setActiveBkashSms] = useState<BkashSmsLetter | null>(null);
@@ -666,14 +693,19 @@ export default function App() {
         prev.map((r) => (r.id === session.reservationId ? { ...r, status: 'checked_in' } : r))
       );
     }
+    // Automatically filter main food menu based on scanned table's unique location or specialty preference
+    if (session.specialtyCategory) {
+      setSelectedCategory(session.specialtyCategory);
+      setSearchQuery('');
+    }
     SoundNotificationService.playQrScanSuccess();
     sendSimulatedPushNotification(
       {
         id: `push-table-checkin-${Date.now()}`,
         title: lang === 'bn' ? '📍 টেবিলে চেক-ইন সফল হয়েছে!' : '📍 Table Check-In Verified!',
         body: lang === 'bn'
-          ? `${session.tableLabelBn}-এ আপনার সেশন শুরু হয়েছে। সরাসরি খাবার অর্ডার করুন!`
-          : `Active at ${session.tableLabelEn}. You can now order fresh meals straight to your table.`,
+          ? `${session.tableLabelBn}-এ আপনার সেশন শুরু হয়েছে। ${session.locationZoneBn ? `(${session.locationZoneBn}) ` : ''}টেবিলের স্পেশাল মেনু স্বয়ংক্রিয়ভাবে ফিল্টার করা হয়েছে!`
+          : `Active at ${session.tableLabelEn}. Food menu automatically filtered for this table's location and specialty preference.`,
         timestamp: 'এখন মাত্র',
         statusText: lang === 'bn' ? 'চেক-ইন সম্পন্ন ✓' : 'Checked In ✓',
       },
@@ -683,8 +715,22 @@ export default function App() {
     );
   };
 
-  const handleOrderForTable = (tableNumber: string, session: ActiveTableSession) => {
-    handleTableCheckIn(session);
+  const handleFilterMenuByTable = (category: FoodCategory, session?: ActiveTableSession) => {
+    setSelectedCategory(category);
+    setSearchQuery('');
+    const targetSession = session || activeTableSession;
+    if (targetSession) {
+      SoundNotificationService.playNotificationChime();
+    }
+    setTimeout(() => {
+      const menuEl = document.getElementById('food-menu-section');
+      if (menuEl) {
+        menuEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
+  const handleOrderForTable = (_tableNumber: string, _tableLabelBn?: string, _tableType?: TableType) => {
     setIsCartOpen(true);
   };
 
@@ -813,6 +859,8 @@ export default function App() {
         onOpenTableBooking={() => setIsTableBookingOpen(true)}
         onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
         activeTableSession={activeTableSession}
+        onOpenShopLocationMap={() => setIsShopLocationMapOpen(true)}
+        onOpenBackgroundSync={() => setIsBackgroundSyncOpen(true)}
         onOpenShareAndQr={() => setIsShareModalOpen(true)}
         onStartCall={handleStartCall}
         onOpenChat={() => setIsChatOpen(true)}
@@ -976,10 +1024,100 @@ export default function App() {
             </div>
           </div>
 
+          {/* Active Table Session Banner when Dine-In session is live */}
+          {activeTableSession && (
+            <div className="mb-3.5 p-3.5 sm:p-4 rounded-3xl bg-gradient-to-r from-stone-900 via-amber-950 to-stone-900 text-white shadow-lg border border-amber-500/40 flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-stone-950 flex items-center justify-center font-black shadow-md shadow-amber-500/20 shrink-0 mt-0.5">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-black text-amber-300">
+                      {lang === 'bn' ? activeTableSession.tableLabelBn : activeTableSession.tableLabelEn}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      {lang === 'bn' ? '● চেক-ইন সক্রিয়' : '● Checked In'}
+                    </span>
+                    {activeTableSession.locationZoneBn && (
+                      <span className="text-xs text-stone-300">
+                        📍 {lang === 'bn' ? activeTableSession.locationZoneBn : activeTableSession.locationZoneEn}
+                      </span>
+                    )}
+                  </div>
+
+                  {activeTableSession.specialtyCategory && (
+                    <p className="text-xs text-amber-200/90 mt-1 flex items-center gap-1.5 flex-wrap">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="font-bold">
+                        {lang === 'bn' ? 'টেবিলের লোকেশন অনুযায়ী স্পেশাল মেনু:' : 'Location Specialty Filter:'}
+                      </span>
+                      <span className="text-stone-200 font-medium">
+                        {lang === 'bn' ? activeTableSession.specialtyTitleBn : activeTableSession.specialtyTitleEn}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                {activeTableSession.specialtyCategory && (
+                  <button
+                    type="button"
+                    onClick={() => handleFilterMenuByTable(activeTableSession.specialtyCategory!, activeTableSession)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                      selectedCategory === activeTableSession.specialtyCategory
+                        ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-500/30'
+                        : 'bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    <Filter className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? 'স্পেশাল মেনু' : 'Specialty'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('all');
+                    setSearchQuery('');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedCategory === 'all'
+                      ? 'bg-stone-700 text-white font-black'
+                      : 'bg-stone-800/80 hover:bg-stone-700 text-stone-300'
+                  }`}
+                >
+                  {lang === 'bn' ? 'সব খাবার' : 'All Items'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsTableQrScannerOpen(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-400 text-xs font-bold border border-stone-700 flex items-center gap-1 cursor-pointer transition-colors"
+                  title={lang === 'bn' ? 'টেবিল কিউআর মডাল' : 'Table QR Scanner'}
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{lang === 'bn' ? 'টেবিল পরিবর্তন' : 'Change'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearTableSession}
+                  className="px-2 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 text-xs font-bold cursor-pointer transition-colors"
+                  title={lang === 'bn' ? 'টেবিল সেশন সমাপ্ত' : 'End Session'}
+                >
+                  {lang === 'bn' ? 'চেক-আউট' : 'Exit'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Category Tabs */}
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
+              const isTableSpecialty = activeTableSession?.specialtyCategory === cat.id;
               const count = cat.id === 'all'
                 ? foodItems.length
                 : foodItems.filter((f) => f.category === cat.id).length;
@@ -994,11 +1132,18 @@ export default function App() {
                   className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
                     isSelected
                       ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20 scale-[1.02]'
+                      : isTableSpecialty
+                      ? 'bg-amber-50 text-amber-900 border-2 border-amber-400 hover:bg-amber-100'
                       : 'bg-white text-stone-700 hover:bg-amber-50 border border-stone-200'
                   }`}
                 >
                   <span>{cat.icon}</span>
                   <span>{lang === 'bn' ? cat.labelBn : cat.labelEn}</span>
+                  {isTableSpecialty && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-stone-950">
+                      {lang === 'bn' ? '✨ টেবিল পছন্দ' : '✨ Table'}
+                    </span>
+                  )}
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] ${
                       isSelected ? 'bg-amber-800 text-amber-100' : 'bg-stone-100 text-stone-600'
@@ -1090,6 +1235,12 @@ export default function App() {
           user={user}
           onAddReview={handleAddReview}
           onLikeReview={handleLikeReview}
+          lang={lang}
+        />
+
+        {/* Store Location Map & Self-Pickup Directions Section */}
+        <ShopLocationSection
+          onOpenFullMapModal={() => setIsShopLocationMapOpen(true)}
           lang={lang}
         />
 
@@ -1315,6 +1466,7 @@ export default function App() {
         isCachedMode={isCachedMode}
         activeTableSession={activeTableSession}
         onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
+        onOpenShopMap={() => setIsShopLocationMapOpen(true)}
       />
 
       <PaymentModal
@@ -1336,6 +1488,7 @@ export default function App() {
           setGmailInvoiceOrder(ord);
           setIsGmailInvoiceOpen(true);
         }}
+        onOpenShopMap={() => setIsShopLocationMapOpen(true)}
         onAddReview={handleAddReview}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onAwardPoints={(points, reasonBn) => {
@@ -1442,8 +1595,28 @@ export default function App() {
         isOpen={isTableBookingOpen}
         onClose={() => setIsTableBookingOpen(false)}
         onConfirmBooking={handleNewReservation}
+        onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
         user={user}
         lang={lang}
+      />
+
+      {/* Table QR Code Camera Scanner & Live Dine-In Check-In Modal */}
+      <TableQrScannerModal
+        isOpen={isTableQrScannerOpen}
+        onClose={() => setIsTableQrScannerOpen(false)}
+        onTableCheckIn={handleTableCheckIn}
+        onOrderForTable={handleOrderForTable}
+        activeTableSession={activeTableSession}
+        reservations={reservations}
+        onUpdateReservationStatus={(resId, status) => {
+          setReservations((prev) =>
+            prev.map((r) => (r.id === resId ? { ...r, status } : r))
+          );
+        }}
+        user={user}
+        lang={lang}
+        onFilterMenuByTable={handleFilterMenuByTable}
+        onClearTableSession={handleClearTableSession}
       />
 
       <GmailInvoiceModal
@@ -1509,6 +1682,8 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenTableBooking={() => setIsTableBookingOpen(true)}
+        onOpenTableQrScanner={() => setIsTableQrScannerOpen(true)}
+        onOpenBackgroundSync={() => setIsBackgroundSyncOpen(true)}
         onOpenShareAndQr={() => setIsShareModalOpen(true)}
         onOpenPrintMenu={() => setIsPrintMenuModalOpen(true)}
         onStartCall={handleStartCall}
@@ -1524,6 +1699,25 @@ export default function App() {
         lang={lang}
         isListeningExternal={isVoiceListening}
         onListeningChange={(listening) => setIsVoiceListening(listening)}
+      />
+
+      {/* Mobile Push Notification Quick Permission Banner */}
+      <MobileNotificationPermissionBanner
+        lang={lang}
+        onOpenSyncModal={() => setIsBackgroundSyncOpen(true)}
+      />
+
+      {/* Low Power Mode Floating Banner */}
+      <LowPowerModeBanner
+        lang={lang}
+        onOpenSyncModal={() => setIsBackgroundSyncOpen(true)}
+      />
+
+      {/* Mobile Background Synchronization & Always-Active Modal */}
+      <BackgroundSyncModal
+        isOpen={isBackgroundSyncOpen}
+        onClose={() => setIsBackgroundSyncOpen(false)}
+        lang={lang}
       />
 
       {/* App Media Share & QR Code Installation Modal */}
@@ -1554,6 +1748,13 @@ export default function App() {
         isOpen={isPrintMenuModalOpen}
         onClose={() => setIsPrintMenuModalOpen(false)}
         foodItems={foodItems}
+        lang={lang}
+      />
+
+      {/* Shop Location & Navigation Map Modal (Online Ordering with Self-Pickup) */}
+      <ShopLocationMapModal
+        isOpen={isShopLocationMapOpen}
+        onClose={() => setIsShopLocationMapOpen(false)}
         lang={lang}
       />
     </div>

@@ -60,3 +60,25 @@
     border-color: #000000 !important;
   }
 }
+
+/* ----------------------------------------------------
+   Low Power Mode: Dim UI, Halt Heavy Animations, Conserve Battery
+   ---------------------------------------------------- */
+html.low-power-mode {
+  filter: brightness(0.82) contrast(0.96);
+  transition: filter 0.5s ease-in-out;
+}
+
+/* Halt non-essential animations, keyframes, transitions, and pulsing effects */
+html.low-power-mode *:not(.low-power-preserve) {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Keep critical modal, dialogs, and interactive overlays crisp & readable */
+html.low-power-mode #background-sync-modal,
+html.low-power-mode .low-power-preserve {
+  filter: brightness(1.12) !important;
+}
