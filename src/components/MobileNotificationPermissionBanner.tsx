@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BellRing, X, Smartphone, CheckCircle2 } from 'lucide-react';
 import { BackgroundSyncService, BackgroundServiceState } from '../services/backgroundSyncService';
 import { SoundNotificationService } from '../services/soundNotificationService';
+import { safeStorage } from '../utils/safeStorage';
 
 interface MobileNotificationPermissionBannerProps {
   lang: 'bn' | 'en';
@@ -14,7 +15,7 @@ export const MobileNotificationPermissionBanner: React.FC<MobileNotificationPerm
 }) => {
   const [state, setState] = useState<BackgroundServiceState>(BackgroundSyncService.getState());
   const [dismissed, setDismissed] = useState<boolean>(() => {
-    return localStorage.getItem('al_sheikh_notif_banner_dismissed') === 'true';
+    return safeStorage.getItem('al_sheikh_notif_banner_dismissed') === 'true';
   });
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export const MobileNotificationPermissionBanner: React.FC<MobileNotificationPerm
 
   const handleDismiss = () => {
     setDismissed(true);
-    localStorage.setItem('al_sheikh_notif_banner_dismissed', 'true');
+    safeStorage.setItem('al_sheikh_notif_banner_dismissed', 'true');
   };
 
   return (

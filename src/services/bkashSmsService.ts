@@ -27,7 +27,7 @@ export function generateBkashSmsLetter(order: Order, customSenderPhone?: string)
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const timestamp = `${dateStr} ${timeStr}`;
   
-  const senderPhone = customSenderPhone || order.customerPhone || '01712345678';
+  const senderPhone = customSenderPhone || order.customerPhone || '01761869921';
   const trxId = order.transactionId || 'BK' + Math.random().toString(36).substring(2, 9).toUpperCase();
   const amount = order.total;
   const balance = 18450 + amount;

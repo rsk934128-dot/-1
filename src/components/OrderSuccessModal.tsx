@@ -32,6 +32,7 @@ import { downloadOrderSummaryPdf } from '../utils/pdfGenerator';
 import { openDirectWhatsApp } from '../utils/whatsappHelper';
 import { printOrderReceipt } from '../utils/printReceiptHelper';
 import { PrintableOrderReceipt } from './PrintableOrderReceipt';
+import { ThermalReceiptView } from './ThermalReceiptView';
 
 interface OrderSuccessModalProps {
   order: Order | null;
@@ -44,6 +45,7 @@ interface OrderSuccessModalProps {
   user?: UserProfile;
   lang: 'bn' | 'en';
   onOpenShopMap?: () => void;
+  onOpenRateMeal?: (order: Order) => void;
 }
 
 export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
@@ -57,9 +59,11 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   user,
   lang,
   onOpenShopMap,
+  onOpenRateMeal,
 }) => {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [showThermalReceipt, setShowThermalReceipt] = useState(false);
 
   // Status simulation / Interactive toggle
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>(order?.status || 'cooking');
@@ -265,8 +269,8 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           {/* Header Info */}
           <div className="text-center pb-3 border-b border-stone-200">
             <h4 className="font-serif font-black text-base text-stone-900">{HOTEL_INFO.nameBn}</h4>
-            <p className="text-xs text-stone-500">প্রোপাইটার: {HOTEL_INFO.proprietorBn}</p>
-            <p className="text-[11px] text-stone-500">{HOTEL_INFO.locationBn} | মোবা: {HOTEL_INFO.phone1}</p>
+            <p className="text-xs text-stone-500">প্রোপাইটার: {HOTEL_INFO.proprietorBn} ({HOTEL_INFO.phone2})</p>
+            <p className="text-[11px] text-stone-500">{HOTEL_INFO.locationBn} | হেল্পলাইন: {HOTEL_INFO.phone1}</p>
           </div>
 
           {/* Token & Order ID Pill */}
@@ -375,6 +379,20 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                   <span>{lang === 'bn' ? 'ভেরিফাইড অর্ডার' : 'Verified Order'}</span>
                 </span>
               </div>
+
+              {onOpenRateMeal && order && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenRateMeal(order);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-black text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all active:scale-98"
+                >
+                  <Star className="w-4 h-4 fill-stone-950" />
+                  <span>{lang === 'bn' ? '⭐ প্রতিটি পদের নির্দিষ্ট মূল্যায়ন দিন (Rate My Meal)' : '⭐ Rate My Meal (Item-Specific Ratings)'}</span>
+                </button>
+              )}
 
               {/* POST-SUBMISSION STATE */}
               {reviewSubmitted && submittedReviewData ? (
@@ -771,6 +789,34 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             </div>
           </div>
 
+          {/* Dedicated Thermal POS Receipt Quick Action Card */}
+          <div className="p-3 bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 text-white rounded-2xl border border-stone-800 flex items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <Receipt className="w-4 h-4" />
+              </div>
+              <div>
+                <h5 className="text-xs font-bold text-amber-300 font-serif flex items-center gap-1.5">
+                  <span>{lang === 'bn' ? 'থার্মাল পিওএস ক্যাশ মেমো' : 'Thermal POS Cash Memo'}</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
+                    58mm / 80mm
+                  </span>
+                </h5>
+                <p className="text-[10px] text-stone-400">
+                  {lang === 'bn' ? 'ক্যাশ কাউন্টার ও কিচেন রোল প্রিন্টারের উপযোগী রসিদ' : 'Ready for counter & kitchen thermal roll printers'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowThermalReceipt(true)}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'রসিদ দেখুন' : 'View POS'}</span>
+            </button>
+          </div>
+
           {/* Prompt to leave feedback if not yet open */}
           {currentStatus !== 'completed' && !showFeedbackForm && (
             <div className="p-3 bg-amber-50/90 rounded-2xl border border-amber-300 flex items-center justify-between gap-2">
@@ -823,6 +869,16 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             </button>
 
             <button
+              type="button"
+              onClick={() => setShowThermalReceipt(true)}
+              className="p-2.5 rounded-xl border border-amber-500 bg-amber-50 hover:bg-amber-100 text-stone-900 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+              title={lang === 'bn' ? 'থার্মাল প্রিন্টার ক্যাশ মেমো ভিউ ও প্রিন্ট' : 'Thermal POS receipt view & print'}
+            >
+              <Receipt className="w-4 h-4 text-amber-600" />
+              <span>{lang === 'bn' ? 'থার্মাল রসিদ' : 'Thermal Receipt'}</span>
+            </button>
+
+            <button
               onClick={handlePrint}
               className="p-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
               title="প্রিন্ট রশিদ"
@@ -870,6 +926,16 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
       </div>
       {/* Hidden container formatted specifically for browser POS printing */}
       <PrintableOrderReceipt order={order} lang={lang} />
+
+      {/* Dedicated Thermal Receipt View Component Modal */}
+      {showThermalReceipt && (
+        <ThermalReceiptView
+          order={order}
+          lang={lang}
+          onClose={() => setShowThermalReceipt(false)}
+          onDirectPrint={() => window.print()}
+        />
+      )}
     </div>
   );
 };

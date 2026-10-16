@@ -159,6 +159,10 @@ export class WebRtcCallManager {
     return this.peerConnection;
   }
 
+  getLocalStream(): MediaStream | null {
+    return this.localStream;
+  }
+
   /**
    * Toggle Audio Mute
    */

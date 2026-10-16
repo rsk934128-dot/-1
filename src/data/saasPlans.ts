@@ -210,7 +210,7 @@ export const INITIAL_SAAS_TENANTS: SaaSTenant[] = [
     id: 'tenant-101',
     restaurantName: 'হোটেল আল শেখ ফরিদ (মূল ফ্ল্যাগশিপ)',
     ownerName: 'মোহাম্মদ আব্দুল বারিক শেখ',
-    phone: '01712217732',
+    phone: '01761869921',
     email: 'fs2217732@gmail.com',
     location: 'ঈশ্বরদী জংশন স্টেশন রোড, ঈশ্বরদী, পাবনা',
     planId: 'enterprise',
@@ -278,12 +278,12 @@ export const INITIAL_SAAS_TENANTS: SaaSTenant[] = [
 ];
 
 export const SAAS_CONTACT_INFO = {
-  salesPhone: '01712-217732',
-  salesWhatsApp: '+8801712217732',
+  salesPhone: '01761869921',
+  salesWhatsApp: '+8801761869921',
   salesEmail: 'fs2217732@gmail.com',
-  bkashMerchantNumber: '01712-217732',
-  nagadNumber: '01712-217732',
-  rocketNumber: '01712-217732',
+  bkashMerchantNumber: '01761869921',
+  nagadNumber: '01761869921',
+  rocketNumber: '01761869921',
   bankDetails: 'Islami Bank Bangladesh Ltd, Ishwardi Branch, A/C: 2050123456789',
   contactPerson: 'মোহাম্মদ আব্দুল বারিক শেখ (প্রোপাইটার ও সফটওয়্যার কনসালটেন্ট)'
 };

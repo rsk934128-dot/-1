@@ -3,6 +3,7 @@ import {
   MapPin, 
   Navigation, 
   Clock, 
+  Phone,
   PhoneCall, 
   ExternalLink, 
   Footprints, 
@@ -87,6 +88,15 @@ export const ShopLocationSection: React.FC<ShopLocationSectionProps> = ({
               <Navigation className="w-3.5 h-3.5" />
               <span>{lang === 'bn' ? 'গুগল ম্যাপে রুট' : 'Google Maps'}</span>
               <ExternalLink className="w-3 h-3" />
+            </a>
+
+            <a
+              href={`tel:${HOTEL_INFO.phone2}`}
+              className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 border border-amber-500/40 transition-colors"
+              title="হোটেল মালিক আব্দুল বারিক শেখকে সরাসরি কল করুন"
+            >
+              <Phone className="w-3.5 h-3.5 text-amber-400" />
+              <span>মালিক: {HOTEL_INFO.phone2}</span>
             </a>
 
             <a
@@ -302,19 +312,28 @@ export const ShopLocationSection: React.FC<ShopLocationSectionProps> = ({
             </div>
 
             {/* Bottom Contact Buttons */}
-            <div className="pt-2 border-t border-stone-800 flex items-center justify-between gap-2">
+            <div className="pt-2 border-t border-stone-800 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <a
+                href={`tel:${HOTEL_INFO.phone2}`}
+                className="py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                title="হোটেল মালিক আব্দুল বারিক শেখকে কল করুন"
+              >
+                <Phone className="w-3.5 h-3.5 text-amber-400" />
+                <span>{lang === 'bn' ? `মালিক: ${HOTEL_INFO.phone2}` : `Owner: ${HOTEL_INFO.phone2}`}</span>
+              </a>
+
               <a
                 href={`tel:${HOTEL_INFO.phone1}`}
-                className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
               >
                 <PhoneCall className="w-3.5 h-3.5" />
-                <span>{lang === 'bn' ? `কল দিন: ${HOTEL_INFO.phone1}` : `Call: ${HOTEL_INFO.phone1}`}</span>
+                <span>{lang === 'bn' ? `হেল্পলাইন: ${HOTEL_INFO.phone1}` : `Call: ${HOTEL_INFO.phone1}`}</span>
               </a>
 
               <button
                 type="button"
                 onClick={onOpenFullMapModal}
-                className="w-full py-2 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold text-xs border border-stone-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="py-2 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold text-xs border border-stone-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Compass className="w-3.5 h-3.5" />
                 <span>{lang === 'bn' ? 'পূর্ণাঙ্গ ম্যাপ' : 'Explore Map'}</span>

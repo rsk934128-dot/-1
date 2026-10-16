@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { safeStorage } from '../utils/safeStorage';
 import { 
   CreditCard, 
   Lock, 
@@ -203,13 +204,9 @@ export const StripeBillingMockup: React.FC<StripeBillingMockupProps> = ({
     setCreatedOrder(orderReq);
     setPaymentStatus('success');
 
-    // Save to local storage for persistence
-    try {
-      const existing = JSON.parse(localStorage.getItem('hotel_saas_lead_orders') || '[]');
-      localStorage.setItem('hotel_saas_lead_orders', JSON.stringify([orderReq, ...existing]));
-    } catch (e) {
-      console.error(e);
-    }
+    // Save to safeStorage for persistence
+    const existing = safeStorage.getJSON<any[]>('hotel_saas_lead_orders') || [];
+    safeStorage.setJSON('hotel_saas_lead_orders', [orderReq, ...existing]);
 
     if (onPaymentSuccess) {
       onPaymentSuccess(orderReq);

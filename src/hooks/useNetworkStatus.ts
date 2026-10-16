@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { safeStorage } from '../utils/safeStorage';
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -21,12 +22,12 @@ export function useNetworkStatus(): NetworkStatus {
   });
 
   const [isSimulatedOffline, setIsSimulatedOffline] = useState<boolean>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_simulate_offline');
+    const saved = safeStorage.getItem('al_sheikh_farid_simulate_offline');
     return saved === 'true';
   });
 
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(() => {
-    const saved = localStorage.getItem(CACHE_SYNC_KEY);
+    const saved = safeStorage.getItem(CACHE_SYNC_KEY);
     return saved ? new Date(saved) : new Date();
   });
 
@@ -37,7 +38,7 @@ export function useNetworkStatus(): NetworkStatus {
   const markSynced = useCallback(() => {
     const now = new Date();
     setLastSyncTime(now);
-    localStorage.setItem(CACHE_SYNC_KEY, now.toISOString());
+    safeStorage.setItem(CACHE_SYNC_KEY, now.toISOString());
   }, []);
 
   // Listen to standard browser online/offline events
@@ -61,7 +62,7 @@ export function useNetworkStatus(): NetworkStatus {
     window.addEventListener('offline', handleOffline);
 
     // Initial sync timestamp if not set
-    if (!localStorage.getItem(CACHE_SYNC_KEY)) {
+    if (!safeStorage.getItem(CACHE_SYNC_KEY)) {
       markSynced();
     }
 
@@ -74,7 +75,7 @@ export function useNetworkStatus(): NetworkStatus {
   const toggleSimulatedOffline = useCallback(() => {
     setIsSimulatedOffline((prev) => {
       const next = !prev;
-      localStorage.setItem('al_sheikh_farid_simulate_offline', String(next));
+      safeStorage.setItem('al_sheikh_farid_simulate_offline', String(next));
       if (!next) {
         setJustReconnected(true);
         markSynced();

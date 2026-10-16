@@ -83,7 +83,7 @@ export const OrderDeliveryMap: React.FC<OrderDeliveryMapProps> = ({
   const riderProfile = useMemo(() => ({
     nameBn: 'মো: তানভীর আহমেদ',
     nameEn: 'Md. Tanvir Ahmed',
-    phone: '01712-345678',
+    phone: '01761869921',
     vehicleBn: 'এক্সপ্রেস ডেলিভারি বাইসাইকেল #০৭',
     vehicleEn: 'Express Delivery Bicycle #07',
     rating: '4.9 ★ (৩৫০+ ডেলিভারি)',

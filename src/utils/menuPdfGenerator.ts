@@ -161,13 +161,13 @@ export async function downloadDailyMenuPdf(
             ${HOTEL_INFO.nameEn}
           </p>
           <p style="margin: 3px 0 0 0; font-size: 10.5px; color: #64748b;">
-            প্রোপাইটার: <strong>${HOTEL_INFO.proprietorBn}</strong> (${HOTEL_INFO.proprietorEn})
+            প্রোপাইটার: <strong>${HOTEL_INFO.proprietorBn}</strong> (${HOTEL_INFO.phone2})
           </p>
           <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">
-            📍 ${HOTEL_INFO.locationBn} (সান্তাহার / জয়পুরহাট রেলওয়ে স্টেশন)
+            📍 ${HOTEL_INFO.locationBn} (রেলওয়ে স্টেশন রোড)
           </p>
           <p style="margin: 2px 0 0 0; font-size: 10px; color: #0284c7; font-weight: 700;">
-            📞 অর্ডার ও টেবিল বুকিং: ${HOTEL_INFO.phone1} | ${HOTEL_INFO.phone2} | ✉ ${HOTEL_INFO.email}
+            📞 মালিক: ${HOTEL_INFO.phone2} | হেল্পলাইন ও WhatsApp: ${HOTEL_INFO.phone1} | ✉ ${HOTEL_INFO.email}
           </p>
         </div>
 
@@ -328,8 +328,8 @@ export function printDailyMenuDirect(foodItems: FoodItem[], lang: 'bn' | 'en' = 
       <body>
         <div class="header">
           <div class="title">${HOTEL_INFO.nameBn}</div>
-          <div class="subtitle">${HOTEL_INFO.nameEn} — প্রোপাইটার: ${HOTEL_INFO.proprietorBn}</div>
-          <div class="meta">📍 ${HOTEL_INFO.locationBn} | 📞 ${HOTEL_INFO.phone1}, ${HOTEL_INFO.phone2}</div>
+          <div class="subtitle">${HOTEL_INFO.nameEn} — প্রোপাইটার: ${HOTEL_INFO.proprietorBn} (${HOTEL_INFO.phone2})</div>
+          <div class="meta">📍 ${HOTEL_INFO.locationBn} | 📞 মালিক: ${HOTEL_INFO.phone2} | হেল্পলাইন: ${HOTEL_INFO.phone1}</div>
           <div class="meta" style="font-weight: bold; margin-top: 4px;">আজকের দৈনিক খাবারের মূল্যতালিকা • তারিখ: ${currentDate}</div>
         </div>
 

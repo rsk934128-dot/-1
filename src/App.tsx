@@ -25,7 +25,9 @@ import {
   QrCode,
   Share2,
   FileDown,
-  Printer
+  Printer,
+  Eye,
+  Crown
 } from 'lucide-react';
 import { 
   FoodItem, 
@@ -42,10 +44,14 @@ import {
   LoyaltyTier,
   TableReservation,
   TableType,
-  ActiveTableSession
+  ActiveTableSession,
+  MealRating,
+  isUserAdmin,
+  SUPER_ADMIN_EMAILS
 } from './types';
 import { HOTEL_INFO, INITIAL_FOOD_ITEMS, INITIAL_USER, INITIAL_ORDERS, INITIAL_REVIEWS, INITIAL_RESERVATIONS } from './data/initialData';
 import { Header } from './components/Header';
+import { AdminAuthModal } from './components/AdminAuthModal';
 import { Banner } from './components/Banner';
 import { TodaysSpecialBanner } from './components/TodaysSpecialBanner';
 import { FoodGallery } from './components/FoodGallery';
@@ -56,6 +62,9 @@ import { CartDrawer } from './components/CartDrawer';
 import { PaymentModal } from './components/PaymentModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { CallModal } from './components/CallModal';
+import { IncomingCallModal } from './components/IncomingCallModal';
+import { callSignalingService, CallSession } from './services/callSignalingService';
+import { ringtoneService } from './utils/ringtoneService';
 import { ChatDrawer } from './components/ChatDrawer';
 import { EmailModal } from './components/EmailModal';
 import { UserAccountModal } from './components/UserAccountModal';
@@ -80,8 +89,10 @@ import { PrintableDailyMenuModal } from './components/PrintableDailyMenuModal';
 import { BackgroundSyncModal } from './components/BackgroundSyncModal';
 import { ShopLocationMapModal } from './components/ShopLocationMapModal';
 import { ShopLocationSection } from './components/ShopLocationSection';
+import { RateMyMealModal } from './components/RateMyMealModal';
 import { MobileNotificationPermissionBanner } from './components/MobileNotificationPermissionBanner';
 import { LowPowerModeBanner } from './components/LowPowerModeBanner';
+import { IncomingOrderRingtoneAlert } from './components/IncomingOrderRingtoneAlert';
 import { BackgroundSyncService } from './services/backgroundSyncService';
 import { 
   SeasonalThemeId, 
@@ -108,9 +119,12 @@ import {
   logOut, 
   saveOrderToFirestore, 
   updateOrderStatusInFirestore, 
-  updateUserProfileInFirestore 
+  updateUserProfileInFirestore,
+  isUnauthorizedDomainError,
+  subscribeToOrders
 } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { safeStorage } from './utils/safeStorage';
 
 export default function App() {
   // Network and Local Cache Status
@@ -124,64 +138,51 @@ export default function App() {
     checkConnection,
   } = useNetworkStatus();
 
-  // State Management with LocalStorage resilience
+  // State Management with safeStorage resilience
   const [lang, setLang] = useState<'bn' | 'en'>('bn');
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    return safeStorage.getItem('al_sheikh_farid_admin_auth') === 'true';
+  });
+  const [adminViewMode, setAdminViewMode] = useState<'admin' | 'customer_preview'>('admin');
+  const [isAdminAuthOpen, setIsAdminAuthOpen] = useState<boolean>(false);
   const [isStaffMode, setIsStaffMode] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('al_sheikh_farid_staff_mode');
-      return saved === 'true';
-    } catch {
-      return false;
-    }
+    return safeStorage.getItem('al_sheikh_farid_staff_mode') === 'true';
   });
   const [isGoogleSignedIn, setIsGoogleSignedIn] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
 
   const [foodItems, setFoodItems] = useState<FoodItem[]>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_menu') || localStorage.getItem('al_sheeth_pori_menu');
-    return saved ? JSON.parse(saved) : INITIAL_FOOD_ITEMS;
+    return safeStorage.getJSON<FoodItem[]>('al_sheikh_farid_menu', safeStorage.getJSON<FoodItem[]>('al_sheeth_pori_menu', INITIAL_FOOD_ITEMS));
   });
 
   const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_user') || localStorage.getItem('al_sheeth_pori_user');
-    return saved ? JSON.parse(saved) : INITIAL_USER;
+    return safeStorage.getJSON<UserProfile>('al_sheikh_farid_user', safeStorage.getJSON<UserProfile>('al_sheeth_pori_user', INITIAL_USER));
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_orders') || localStorage.getItem('al_sheeth_pori_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    return safeStorage.getJSON<Order[]>('al_sheikh_farid_orders', safeStorage.getJSON<Order[]>('al_sheeth_pori_orders', INITIAL_ORDERS));
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_cart') || localStorage.getItem('al_sheeth_pori_cart');
-    return saved ? JSON.parse(saved) : [];
+    return safeStorage.getJSON<CartItem[]>('al_sheikh_farid_cart', safeStorage.getJSON<CartItem[]>('al_sheeth_pori_cart', []));
   });
 
   const [reviews, setReviews] = useState<Review[]>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_reviews');
-    return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
+    return safeStorage.getJSON<Review[]>('al_sheikh_farid_reviews', INITIAL_REVIEWS);
   });
 
   const [reservations, setReservations] = useState<TableReservation[]>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_reservations');
-    return saved ? JSON.parse(saved) : INITIAL_RESERVATIONS;
+    return safeStorage.getJSON<TableReservation[]>('al_sheikh_farid_reservations', INITIAL_RESERVATIONS);
   });
 
   // UI Navigation & Modal States
   const [activeTableSession, setActiveTableSession] = useState<ActiveTableSession | null>(() => {
-    const saved = localStorage.getItem('al_sheikh_farid_table_session');
-    return saved ? JSON.parse(saved) : null;
+    return safeStorage.getJSON<ActiveTableSession | null>('al_sheikh_farid_table_session', null);
   });
   const [selectedCategory, setSelectedCategory] = useState<FoodCategory>(() => {
-    const savedSession = localStorage.getItem('al_sheikh_farid_table_session');
-    if (savedSession) {
-      try {
-        const parsed: ActiveTableSession = JSON.parse(savedSession);
-        if (parsed.specialtyCategory) {
-          return parsed.specialtyCategory;
-        }
-      } catch {}
+    const session = safeStorage.getJSON<ActiveTableSession | null>('al_sheikh_farid_table_session', null);
+    if (session && session.specialtyCategory) {
+      return session.specialtyCategory;
     }
     return 'all';
   });
@@ -202,9 +203,14 @@ export default function App() {
   const [isShopLocationMapOpen, setIsShopLocationMapOpen] = useState<boolean>(false);
   const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
 
-  // Call States
+  // Call & Ringtone States
   const [isCallOpen, setIsCallOpen] = useState<boolean>(false);
   const [callType, setCallType] = useState<CallType>('audio');
+  const [activeCallSessionId, setActiveCallSessionId] = useState<string | undefined>();
+  const [isCallIncomingReceived, setIsCallIncomingReceived] = useState<boolean>(false);
+  const [incomingCallSession, setIncomingCallSession] = useState<CallSession | null>(null);
+  const [isIncomingCallOpen, setIsIncomingCallOpen] = useState<boolean>(false);
+  const [isRingtoneMuted, setIsRingtoneMuted] = useState<boolean>(false);
 
   // Modals for Items & Orders
   const [detailFood, setDetailFood] = useState<FoodItem | null>(null);
@@ -218,6 +224,9 @@ export default function App() {
     specialNote?: string;
     subtotal: number;
     deliveryFee: number;
+    discount?: number;
+    pointsRedeemed?: number;
+    pointsEarned?: number;
     total: number;
   } | null>(null);
   const [isPaymentOpen, setIsPaymentOpen] = useState<boolean>(false);
@@ -225,6 +234,8 @@ export default function App() {
   const [emailInvoiceOrder, setEmailInvoiceOrder] = useState<Order | null>(null);
   const [gmailInvoiceOrder, setGmailInvoiceOrder] = useState<Order | null>(null);
   const [isGmailInvoiceOpen, setIsGmailInvoiceOpen] = useState<boolean>(false);
+  const [isRateMyMealOpen, setIsRateMyMealOpen] = useState<boolean>(false);
+  const [rateMyMealOrder, setRateMyMealOrder] = useState<Order | null>(null);
 
   // Push Notification Simulation State
   const [pushNotification, setPushNotification] = useState<PushNotificationPayload | null>(null);
@@ -257,21 +268,74 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       if (fbUser) {
         setIsGoogleSignedIn(true);
+        const email = fbUser.email;
+        const isOwner = isUserAdmin(email);
         setUser((prev) => ({
           ...prev,
           uid: fbUser.uid,
           name: fbUser.displayName || prev.name,
-          email: fbUser.email || prev.email,
+          email: email || prev.email,
           photoURL: fbUser.photoURL || undefined,
           avatar: fbUser.photoURL || undefined,
+          role: isOwner ? 'admin' : 'customer',
         }));
+        if (isOwner) {
+          setIsAdmin(true);
+          setAdminViewMode('admin');
+          safeStorage.setItem('al_sheikh_farid_admin_auth', 'true');
+        }
       } else {
+        // In preview/dev mode, check if a verified session was saved in safe storage
+        const parsed = safeStorage.getJSON<{ email?: string; role?: string; name?: string } | null>('al_sheikh_farid_preview_auth', null);
+        if (parsed && parsed.email) {
+          setIsGoogleSignedIn(true);
+          const isOwner = isUserAdmin(parsed.email);
+          setUser((prev) => ({
+            ...prev,
+            ...parsed,
+            role: isOwner ? 'admin' : ((parsed.role as any) || 'customer'),
+          }));
+          if (isOwner) {
+            setIsAdmin(true);
+            setAdminViewMode('admin');
+            safeStorage.setItem('al_sheikh_farid_admin_auth', 'true');
+          }
+          return;
+        }
         setIsGoogleSignedIn(false);
       }
     });
 
     return () => unsubscribe();
   }, []);
+
+  // Subscribe to real-time incoming orders from Firestore so hotel owner gets real-time ringtone on any device
+  useEffect(() => {
+    try {
+      const unsubscribe = subscribeToOrders(user.uid, isAdmin, (fetchedOrders) => {
+        if (fetchedOrders && fetchedOrders.length > 0) {
+          setOrders(fetchedOrders);
+          safeStorage.setJSON('al_sheikh_farid_orders', fetchedOrders);
+        }
+      });
+      return () => unsubscribe();
+    } catch {
+      // offline fallback
+    }
+  }, [user.uid, isAdmin]);
+
+  // Persistent Ringtone Watchdog: keeps the ringtone ringing continuously as long as any order is pending hotel owner confirmation!
+  useEffect(() => {
+    const pendingOrders = orders.filter((o) => o.status === 'pending');
+    if (pendingOrders.length > 0) {
+      pendingOrders.forEach((ord) => {
+        SoundNotificationService.startOrderRingtone(ord.id);
+      });
+    } else {
+      // All orders confirmed! Stop the ringtone!
+      SoundNotificationService.stopOrderRingtone();
+    }
+  }, [orders]);
 
   // Google Sign-In / Account Creation
   const handleGoogleSignIn = async () => {
@@ -283,24 +347,44 @@ export default function App() {
         return;
       }
       const { user: authedUser } = authResult;
-      setUser(authedUser);
+      const isOwner = isUserAdmin(authedUser.email);
+      const finalUser = {
+        ...authedUser,
+        role: isOwner ? ('admin' as const) : ('customer' as const),
+      };
+      setUser(finalUser);
       setIsGoogleSignedIn(true);
+
+      if (isOwner) {
+        setIsAdmin(true);
+        setAdminViewMode('admin');
+        safeStorage.setItem('al_sheikh_farid_admin_auth', 'true');
+      }
       
       // Send greeting notification
       sendSimulatedPushNotification(
         {
           id: `auth-${Date.now()}`,
-          title: lang === 'bn' ? '🎉 গুগল সাইন-ইন সফল হয়েছে!' : '🎉 Google Sign-in Successful!',
+          title: lang === 'bn' 
+            ? (isOwner ? '👑 হোটেল মালিক হিসেবে সাইন-ইন সফল!' : '🎉 গুগল সাইন-ইন সফল হয়েছে!') 
+            : (isOwner ? '👑 Signed in as Hotel Owner!' : '🎉 Google Sign-in Successful!'),
           body: lang === 'bn' 
-            ? `স্বাগতম ${authedUser.name}! হোটেল আল শেখ ফরিদ-এ আপনার অ্যাকাউন্ট যুক্ত হয়েছে।` 
+            ? (isOwner 
+                ? `স্বাগতম মোহাম্মদ আব্দুল বারিক শেখ! সম্পূর্ণ অ্যাডমিন কন্ট্রোল সক্রিয় হয়েছে।`
+                : `স্বাগতম ${authedUser.name}! হোটেল আল শেখ ফরিদ-এ আপনার অ্যাকাউন্ট যুক্ত হয়েছে।`)
             : `Welcome ${authedUser.name}! Your account is connected.`,
           timestamp: 'এখন মাত্র',
-          statusText: lang === 'bn' ? 'ভেরিফাইড অ্যাকাউন্ট ✓' : 'Verified Account ✓',
+          statusText: isOwner ? 'মালিক মোড ✓' : 'ভেরিফাইড অ্যাকাউন্ট ✓',
         },
         (payload) => setPushNotification(payload)
       );
     } catch (err: unknown) {
-      console.error('Google Sign-In error:', err);
+      if (isUnauthorizedDomainError(err)) {
+        // Handled gracefully in signInWithGoogle fallback
+        console.warn('Google Sign-In note: Preview domain authorization handled gracefully.');
+      } else {
+        console.warn('Google Sign-In notice:', err);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -309,7 +393,55 @@ export default function App() {
   const handleSignOut = async () => {
     await logOut();
     setIsGoogleSignedIn(false);
+    setIsAdmin(false);
+    setAdminViewMode('admin');
+    safeStorage.removeItem('al_sheikh_farid_admin_auth');
+    safeStorage.removeItem('al_sheikh_farid_preview_auth');
     setUser(INITIAL_USER);
+  };
+
+  const handleAdminSuccess = (adminEmail: string) => {
+    setIsAdmin(true);
+    setAdminViewMode('admin');
+    safeStorage.setItem('al_sheikh_farid_admin_auth', 'true');
+    setUser((prev) => ({
+      ...prev,
+      role: 'admin',
+      email: prev.email || adminEmail,
+      name: prev.name === 'অতিথি ব্যবহারকারী' ? HOTEL_INFO.proprietorBn : prev.name,
+    }));
+    sendSimulatedPushNotification(
+      {
+        id: `admin-auth-${Date.now()}`,
+        title: lang === 'bn' ? '👑 অ্যাডমিন মোড সক্রিয়!' : '👑 Admin Mode Activated!',
+        body: lang === 'bn' 
+          ? 'হোটেল আল শেখ ফরিদ অ্যাডমিন কন্ট্রোল সক্রিয় হয়েছে। আপনি এখন সম্পূর্ণ সিস্টেম নিয়ন্ত্রণ করতে পারবেন।' 
+          : 'Hotel Al Sheikh Farid Admin Control Activated.',
+        timestamp: 'এখন মাত্র',
+        statusText: 'মালিক মোড ✓',
+      },
+      (payload) => setPushNotification(payload)
+    );
+  };
+
+  const handleExitAdmin = () => {
+    setIsAdmin(false);
+    setAdminViewMode('admin');
+    safeStorage.removeItem('al_sheikh_farid_admin_auth');
+    setUser((prev) => ({
+      ...prev,
+      role: 'customer',
+    }));
+    sendSimulatedPushNotification(
+      {
+        id: `admin-exit-${Date.now()}`,
+        title: lang === 'bn' ? 'কাস্টমার মোডে ফিরেছেন' : 'Returned to Customer Mode',
+        body: lang === 'bn' ? 'অ্যাডমিন মোড থেকে সফলভাবে বের হওয়া হয়েছে।' : 'Exited admin mode successfully.',
+        timestamp: 'এখন মাত্র',
+        statusText: 'কাস্টমার ভিউ',
+      },
+      (payload) => setPushNotification(payload)
+    );
   };
 
   const handleUpdateProfile = (updated: Partial<UserProfile>) => {
@@ -322,29 +454,29 @@ export default function App() {
     });
   };
 
-  // Sync to local storage
+  // Sync to safe storage
   useEffect(() => {
-    localStorage.setItem('al_sheikh_farid_menu', JSON.stringify(foodItems));
+    safeStorage.setJSON('al_sheikh_farid_menu', foodItems);
   }, [foodItems]);
 
   useEffect(() => {
-    localStorage.setItem('al_sheikh_farid_orders', JSON.stringify(orders));
+    safeStorage.setJSON('al_sheikh_farid_orders', orders);
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('al_sheikh_farid_cart', JSON.stringify(cart));
+    safeStorage.setJSON('al_sheikh_farid_cart', cart);
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('al_sheikh_farid_user', JSON.stringify(user));
+    safeStorage.setJSON('al_sheikh_farid_user', user);
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem('al_sheikh_farid_reviews', JSON.stringify(reviews));
+    safeStorage.setJSON('al_sheikh_farid_reviews', reviews);
   }, [reviews]);
 
   useEffect(() => {
-    localStorage.setItem('al_sheikh_farid_reservations', JSON.stringify(reservations));
+    safeStorage.setJSON('al_sheikh_farid_reservations', reservations);
   }, [reservations]);
 
   // Review Handlers
@@ -502,8 +634,8 @@ export default function App() {
     setPendingCheckout(null);
     setCompletedOrder(newOrder);
 
-    // Play pleasant kitchen service bell sound for new incoming order
-    SoundNotificationService.playNewOrderBell();
+    // Start continuous ringtone loop for new incoming order until hotel owner confirms it
+    SoundNotificationService.startOrderRingtone(newOrder.id);
 
     // If bKash payment, generate SMS letter and trigger the Mobile Notification Bar!
     if (paymentInfo.method === 'bkash') {
@@ -516,6 +648,9 @@ export default function App() {
 
   // 1-Click bKash SMS Verification & Order Confirmation Handler
   const handleVerifyOrderWithSms = (orderId: string, trxId?: string) => {
+    // Stop continuous incoming order ringtone
+    SoundNotificationService.stopOrderRingtone(orderId);
+
     setOrders((prev) =>
       prev.map((o) =>
         o.id === orderId
@@ -563,10 +698,105 @@ export default function App() {
     setIsBkashLetterModalOpen(true);
   };
 
-  // Calls
-  const handleStartCall = (type: CallType) => {
+  // WebRTC Call Signaling & Incoming Ringtone Subscription
+  useEffect(() => {
+    const unsubscribe = callSignalingService.subscribe((signal) => {
+      if (signal.action === 'initiate') {
+        // If this tab was the initiator of the call, don't show incoming call modal on self
+        if (signal.session.initiatorClientId === callSignalingService.clientId) {
+          return;
+        }
+
+        // On hotel owner's side (or other tab / device), ring with incoming call modal & melodic ringtone
+        setIncomingCallSession(signal.session);
+        setIsIncomingCallOpen(true);
+        ringtoneService.startIncomingRingtone(0.85);
+
+        // Also show browser notification toast for hotel owner
+        setPushNotification({
+          id: `call-${Date.now()}`,
+          title: lang === 'bn' ? '📞 ইনকামিং লাইভ কল আসছে!' : '📞 Incoming Live Call!',
+          body: lang === 'bn'
+            ? `${signal.session.callerName} (${signal.session.callerPhone}) হোটেল মালিককে কল দিয়েছেন। রিসিভ করতে ক্লিক করুন।`
+            : `${signal.session.callerName} (${signal.session.callerPhone}) is calling the hotel owner. Click to answer.`,
+          orderId: signal.session.id,
+          timestamp: 'এখনই',
+          statusText: lang === 'bn' ? 'কল বাজছে 📞' : 'Ringing 📞',
+        });
+      } else if (signal.action === 'accept') {
+        setIsIncomingCallOpen(false);
+        ringtoneService.stop();
+      } else if (signal.action === 'decline' || signal.action === 'end') {
+        setIsIncomingCallOpen(false);
+        setIncomingCallSession(null);
+        ringtoneService.stop();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      ringtoneService.stop();
+    };
+  }, [lang]);
+
+  // Customer or Admin initiates call
+  const handleStartCall = (type: CallType, customerName?: string, customerPhone?: string) => {
+    const session = callSignalingService.initiateCall(
+      type,
+      customerName || user.name || (isAdmin ? 'হোটেল এডমিন' : 'অনলাইন কাস্টমার / অতিথি'),
+      customerPhone || user.phone || '01761869921',
+      isAdmin ? 'admin' : 'customer'
+    );
     setCallType(type);
+    setActiveCallSessionId(session.id);
+    setIsCallIncomingReceived(false);
     setIsCallOpen(true);
+  };
+
+  const handleAcceptIncomingCall = () => {
+    ringtoneService.stop();
+    ringtoneService.playCallConnected();
+    setIsIncomingCallOpen(false);
+    if (incomingCallSession) {
+      callSignalingService.acceptCall(incomingCallSession.id);
+      setCallType(incomingCallSession.type);
+      setActiveCallSessionId(incomingCallSession.id);
+      setIsCallIncomingReceived(true);
+      setIsCallOpen(true);
+    }
+  };
+
+  const handleDeclineIncomingCall = () => {
+    ringtoneService.stop();
+    ringtoneService.playCallEnded();
+    if (incomingCallSession) {
+      callSignalingService.declineCall(incomingCallSession.id);
+    }
+    setIsIncomingCallOpen(false);
+    setIncomingCallSession(null);
+  };
+
+  const handleToggleMuteRingtone = () => {
+    const nextMuted = !isRingtoneMuted;
+    setIsRingtoneMuted(nextMuted);
+    ringtoneService.setMuted(nextMuted);
+  };
+
+  const handleTestIncomingCall = (type: CallType = 'audio') => {
+    const testSession: CallSession = {
+      id: `CALL-TEST-${Date.now()}`,
+      type,
+      callerName: 'মো: আব্দুল্লাহ (গ্রাহক - ঈশ্বরদী জংশন)',
+      callerPhone: '01761869921',
+      callerRole: 'customer',
+      targetRole: 'admin',
+      status: 'ringing',
+      startedAt: Date.now(),
+      initiatorClientId: 'test-simulation',
+    };
+    setIncomingCallSession(testSession);
+    setIsIncomingCallOpen(true);
+    ringtoneService.startIncomingRingtone(0.85);
   };
 
   // Re-order past order: Clones items into cart, closes profile modal, and opens cart for instant checkout
@@ -610,6 +840,22 @@ export default function App() {
           setPushNotification(payload);
         }
       );
+
+      // Auto-trigger 'Rate My Meal' modal when order is marked as completed
+      const completedOrd: Order = { ...existingOrder, status: 'completed' };
+      setTimeout(() => {
+        setRateMyMealOrder(completedOrd);
+        setIsRateMyMealOpen(true);
+      }, 600);
+    }
+
+    // Stop continuous incoming order ringtone when owner changes status from pending
+    if (status !== 'pending') {
+      SoundNotificationService.stopOrderRingtone(orderId);
+    }
+
+    if (status === 'confirmed') {
+      SoundNotificationService.playKitchenBell();
     }
 
     setOrders((prev) =>
@@ -618,6 +864,96 @@ export default function App() {
 
     // Sync to Firestore
     updateOrderStatusInFirestore(orderId, status);
+  };
+
+  // Hotel Owner Explicit Order Confirmation Handler (Stops continuous ringtone and confirms order)
+  const handleHotelOwnerConfirmOrder = (orderId: string) => {
+    SoundNotificationService.stopOrderRingtone(orderId);
+    SoundNotificationService.playKitchenBell();
+    handleUpdateOrderStatus(orderId, 'confirmed');
+
+    const targetOrder = orders.find((o) => o.id === orderId);
+    const summary = targetOrder
+      ? targetOrder.items.map((i) => (lang === 'bn' ? i.food.nameBn : i.food.nameEn)).join(', ')
+      : '';
+
+    setPushNotification({
+      id: `confirm-${orderId}-${Date.now()}`,
+      title: lang === 'bn' ? '✓ অর্ডার কনফার্ম করা হয়েছে!' : '✓ Order Confirmed!',
+      body: lang === 'bn' 
+        ? `অর্ডার #${orderId} (${summary}) হোটেল মালিক কনফার্ম করেছেন। রিংটোন বন্ধ হয়েছে।` 
+        : `Order #${orderId} (${summary}) confirmed by hotel owner. Ringtone stopped.`,
+      orderId,
+      timestamp: 'এখন মাত্র',
+      statusText: lang === 'bn' ? 'কনফার্মড ✓' : 'Confirmed ✓',
+    });
+  };
+
+  // Save Meal Rating to order history, award loyalty points & sync customer review
+  const handleSaveMealRating = (orderId: string, mealRating: MealRating) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              mealRating,
+            }
+          : o
+      )
+    );
+
+    // Award +15 loyalty points to the user
+    setUser((prevUser) => {
+      const currentPts = prevUser.loyaltyPoints !== undefined ? prevUser.loyaltyPoints : 75;
+      const newPoints = currentPts + 15;
+      const newHistoryItem: PointsHistoryItem = {
+        id: `pts-${Date.now()}-rating`,
+        date: 'আজ',
+        type: 'bonus',
+        points: 15,
+        descriptionBn: `অর্ডার #${orderId} এর খাবারে রেটিং ও ফিডব্যাক বোনাস`,
+        descriptionEn: `Feedback & rating bonus for Order #${orderId}`,
+        orderId,
+      };
+      const nextTier: LoyaltyTier = newPoints >= 200 ? 'platinum' : newPoints >= 100 ? 'gold' : newPoints >= 50 ? 'silver' : 'bronze';
+      const updatedUser: UserProfile = {
+        ...prevUser,
+        loyaltyPoints: newPoints,
+        loyaltyTier: nextTier,
+        pointsHistory: [newHistoryItem, ...(prevUser.pointsHistory || [])],
+      };
+      if (prevUser.uid) {
+        updateUserProfileInFirestore(prevUser.uid, updatedUser);
+      }
+      return updatedUser;
+    });
+
+    // Also persist updated order with mealRating to Firestore
+    const ratedOrder = orders.find((o) => o.id === orderId);
+    if (ratedOrder) {
+      saveOrderToFirestore({ ...ratedOrder, mealRating }, user.uid);
+    }
+
+    // If an overall comment is written, also publish to public customer reviews
+    if (mealRating.overallComment && mealRating.overallComment.trim().length > 0) {
+      const topItems = mealRating.itemFeedbacks.map((f) => f.foodNameBn).slice(0, 2).join(' ও ');
+      const newReview: Review = {
+        id: `rev-order-${orderId}-${Date.now()}`,
+        customerName: mealRating.customerName || user.name || 'সম্মানিত অতিথি',
+        customerPhone: user.phone || '01712-***000',
+        rating: mealRating.overallRating,
+        serviceRating: mealRating.serviceRating || 5,
+        foodName: topItems || 'হোটেল আল শেখ ফরিদ স্পেশাল খাবার',
+        comment: mealRating.overallComment,
+        createdAt: 'আজ, মাত্র',
+        passengerType: 'যাচাইকৃত খাবার ক্রেতা (Verified Order)',
+        verifiedOrder: true,
+        orderId: orderId,
+        tags: mealRating.quickTags || [],
+        likes: 1,
+      };
+      setReviews((prev) => [newReview, ...prev]);
+    }
   };
 
   // Trigger simulated push notification manually for instant test
@@ -687,7 +1023,7 @@ export default function App() {
   // Table QR Check-In & Active Table Session Handlers
   const handleTableCheckIn = (session: ActiveTableSession) => {
     setActiveTableSession(session);
-    localStorage.setItem('al_sheikh_farid_table_session', JSON.stringify(session));
+    safeStorage.setJSON('al_sheikh_farid_table_session', session);
     if (session.reservationId) {
       setReservations((prev) =>
         prev.map((r) => (r.id === session.reservationId ? { ...r, status: 'checked_in' } : r))
@@ -736,7 +1072,7 @@ export default function App() {
 
   const handleClearTableSession = () => {
     setActiveTableSession(null);
-    localStorage.removeItem('al_sheikh_farid_table_session');
+    safeStorage.removeItem('al_sheikh_farid_table_session');
     SoundNotificationService.playNotificationChime();
   };
 
@@ -744,7 +1080,7 @@ export default function App() {
   const handleToggleStaffMode = () => {
     setIsStaffMode((prev) => {
       const next = !prev;
-      localStorage.setItem('al_sheikh_farid_staff_mode', String(next));
+      safeStorage.setItem('al_sheikh_farid_staff_mode', String(next));
       if (next && !isAdmin) {
         setIsAdmin(true); // Open admin dashboard automatically when staff mode is activated
       }
@@ -874,7 +1210,17 @@ export default function App() {
         isVoiceListening={isVoiceListening}
         unreadSmsCount={activeBkashSms && !activeBkashSms.isVerified ? 1 : 0}
         isAdmin={isAdmin}
-        onToggleAdmin={() => setIsAdmin(!isAdmin)}
+        onToggleAdmin={() => {
+          if (!isAdmin) {
+            setIsAdminAuthOpen(true);
+          } else {
+            setAdminViewMode((prev) => (prev === 'admin' ? 'customer_preview' : 'admin'));
+          }
+        }}
+        onOpenAdminAuth={() => setIsAdminAuthOpen(true)}
+        adminViewMode={adminViewMode}
+        onToggleAdminViewMode={() => setAdminViewMode((prev) => (prev === 'admin' ? 'customer_preview' : 'admin'))}
+        onExitAdmin={handleExitAdmin}
         isStaffMode={isStaffMode}
         onToggleStaffMode={handleToggleStaffMode}
         lang={lang}
@@ -898,6 +1244,28 @@ export default function App() {
         onToggleSimulatedOffline={toggleSimulatedOffline}
         lang={lang}
       />
+
+      {/* Customer Preview Notice Banner (Shown when Admin is previewing Customer View) */}
+      {isAdmin && adminViewMode === 'customer_preview' && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-4 py-2.5 shadow-md border-b border-amber-600 sticky top-18 z-30 flex items-center justify-between gap-3 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 text-xs font-bold">
+            <Eye className="w-4 h-4 text-stone-950 animate-pulse shrink-0" />
+            <span>
+              {lang === 'bn' 
+                ? '👁️ কাস্টমার প্রিভিউ মোড চলছে: সাধারণ কাস্টমাররা যেভাবে অ্যাপটি দেখেন আপনি এখন ঠিক সেভাবে দেখছেন।' 
+                : '👁️ Customer Preview Mode: Viewing the app exactly as an ordinary customer sees it.'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdminViewMode('admin')}
+            className="px-3 py-1 bg-stone-950 hover:bg-stone-800 text-amber-300 hover:text-white rounded-lg text-xs font-black shadow-xs cursor-pointer transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>{lang === 'bn' ? 'অ্যাডমিন ড্যাশবোর্ডে ফিরুন' : 'Back to Admin Panel'}</span>
+          </button>
+        </div>
+      )}
 
       <main className="flex-1 max-w-7xl mx-auto w-full pb-20">
         {/* Active Order Progress & Push Notification Simulation Tracker */}
@@ -924,8 +1292,8 @@ export default function App() {
           lang={lang}
         />
 
-        {/* Admin Dashboard if activated */}
-        {isAdmin && (
+        {/* Admin Dashboard if activated and in Admin Mode */}
+        {isAdmin && adminViewMode === 'admin' && (
           <AdminDashboard
             orders={orders}
             foodItems={foodItems}
@@ -937,7 +1305,9 @@ export default function App() {
               setIsGmailInvoiceOpen(true);
             }}
             onOpenBkashSms={(ord) => handleOpenBkashSmsModal(ord)}
-            onCloseAdmin={() => setIsAdmin(false)}
+            onStartCallWithCustomer={(name, phone, type) => handleStartCall(type, name, phone)}
+            onTestIncomingCall={() => handleTestIncomingCall('audio')}
+            onCloseAdmin={() => setAdminViewMode('customer_preview')}
             isStaffMode={isStaffMode}
             onToggleStaffMode={handleToggleStaffMode}
             lang={lang}
@@ -1365,6 +1735,14 @@ export default function App() {
             <p className="text-xs text-amber-300 font-semibold">
               প্রোপাইটার: {HOTEL_INFO.proprietorBn}
             </p>
+            <a 
+              href={`tel:${HOTEL_INFO.phone2}`}
+              className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-200 mt-1 font-mono transition-colors"
+              title="মালিকের সাথে কথা বলুন"
+            >
+              <Phone className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>মালিকের মোবাইল: {HOTEL_INFO.phone2}</span>
+            </a>
           </div>
 
           <div>
@@ -1386,6 +1764,14 @@ export default function App() {
                 <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <span>{HOTEL_INFO.locationBn}</span>
               </p>
+              <a 
+                href={`tel:${HOTEL_INFO.phone2}`}
+                className="flex items-center gap-1.5 text-amber-300 hover:text-amber-100 transition-colors font-medium py-0.5"
+                title="হোটেল মালিক আব্দুল বারিক শেখকে সরাসরি কল দিন"
+              >
+                <Phone className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>মালিক (আব্দুল বারিক শেখ): {HOTEL_INFO.phone2}</span>
+              </a>
               <button
                 type="button"
                 onClick={() => openDirectWhatsApp(undefined, user, lang)}
@@ -1395,10 +1781,13 @@ export default function App() {
                 <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>WhatsApp: {HOTEL_INFO.phone1} ({lang === 'bn' ? 'সরাসরি চ্যাট' : 'Direct Chat'})</span>
               </button>
-              <p className="flex items-center gap-1.5">
-                <Phone className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>{HOTEL_INFO.phone1}, {HOTEL_INFO.phone2}</span>
-              </p>
+              <a 
+                href={`tel:${HOTEL_INFO.phone1}`}
+                className="flex items-center gap-1.5 text-stone-300 hover:text-white transition-colors py-0.5"
+              >
+                <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{lang === 'bn' ? 'হেল্পলাইন:' : 'Helpline:'} {HOTEL_INFO.phone1}</span>
+              </a>
               <p className="flex items-center gap-1.5">
                 <Mail className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>{HOTEL_INFO.email}</span>
@@ -1489,6 +1878,10 @@ export default function App() {
           setIsGmailInvoiceOpen(true);
         }}
         onOpenShopMap={() => setIsShopLocationMapOpen(true)}
+        onOpenRateMeal={(ord) => {
+          setRateMyMealOrder(ord);
+          setIsRateMyMealOpen(true);
+        }}
         onAddReview={handleAddReview}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onAwardPoints={(points, reasonBn) => {
@@ -1515,11 +1908,43 @@ export default function App() {
         lang={lang}
       />
 
+      <RateMyMealModal
+        isOpen={isRateMyMealOpen}
+        onClose={() => setIsRateMyMealOpen(false)}
+        order={rateMyMealOrder}
+        onSaveRating={handleSaveMealRating}
+        lang={lang}
+        user={user}
+      />
+
+      <IncomingCallModal
+        session={incomingCallSession}
+        isOpen={isIncomingCallOpen}
+        onAccept={handleAcceptIncomingCall}
+        onDecline={handleDeclineIncomingCall}
+        lang={lang}
+        isRingtoneMuted={isRingtoneMuted}
+        onToggleMuteRingtone={handleToggleMuteRingtone}
+      />
+
       <CallModal
         isOpen={isCallOpen}
-        onClose={() => setIsCallOpen(false)}
+        onClose={() => {
+          setIsCallOpen(false);
+          setIsCallIncomingReceived(false);
+          if (activeCallSessionId) {
+            callSignalingService.endCall(activeCallSessionId);
+            setActiveCallSessionId(undefined);
+          }
+        }}
         initialType={callType}
         lang={lang}
+        currentUserRole={isAdmin ? 'admin' : 'customer'}
+        currentAdminEmail="fs2217732@gmail.com"
+        targetCustomerName={incomingCallSession?.callerName || user.name || 'অনলাইন কাস্টমার / অতিথি'}
+        targetCustomerPhone={incomingCallSession?.callerPhone || user.phone || '01761869921'}
+        isIncomingReceived={isCallIncomingReceived}
+        activeCallId={activeCallSessionId}
       />
 
       <ChatDrawer
@@ -1546,6 +1971,16 @@ export default function App() {
         orders={orders}
         foodItems={foodItems}
         reservations={reservations}
+        isAdmin={isAdmin}
+        onOpenAdminDashboard={() => {
+          setIsAccountOpen(false);
+          setIsAdmin(true);
+          setAdminViewMode('admin');
+        }}
+        onOpenAdminLogin={() => {
+          setIsAccountOpen(false);
+          setIsAdminAuthOpen(true);
+        }}
         onCancelReservation={handleCancelReservation}
         onOpenTableBooking={() => {
           setIsAccountOpen(false);
@@ -1565,6 +2000,10 @@ export default function App() {
         onEmailInvoice={(ord) => {
           setGmailInvoiceOrder(ord);
           setIsGmailInvoiceOpen(true);
+        }}
+        onOpenRateMeal={(ord) => {
+          setRateMyMealOrder(ord);
+          setIsRateMyMealOpen(true);
         }}
         lang={lang}
         onSignInWithGoogle={handleGoogleSignIn}
@@ -1678,6 +2117,17 @@ export default function App() {
       />
 
       {/* Interactive Voice Command Listener & Navigation HUD */}
+      {/* Admin Authentication & Security Login Modal */}
+      <AdminAuthModal
+        isOpen={isAdminAuthOpen}
+        onClose={() => setIsAdminAuthOpen(false)}
+        onAdminSuccess={handleAdminSuccess}
+        onSignInWithGoogle={handleGoogleSignIn}
+        isGoogleSignedIn={isGoogleSignedIn}
+        currentUserEmail={user.email}
+        lang={lang}
+      />
+
       <VoiceCommandListener
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
@@ -1694,7 +2144,13 @@ export default function App() {
         onGoToMenu={handleGoToMenu}
         onSearchFood={handleSearchFood}
         onToggleLang={() => setLang(lang === 'bn' ? 'en' : 'bn')}
-        onToggleAdmin={() => setIsAdmin(!isAdmin)}
+        onToggleAdmin={() => {
+          if (!isAdmin) {
+            setIsAdminAuthOpen(true);
+          } else {
+            setAdminViewMode((prev) => (prev === 'admin' ? 'customer_preview' : 'admin'));
+          }
+        }}
         onToggleStaffMode={handleToggleStaffMode}
         lang={lang}
         isListeningExternal={isVoiceListening}
@@ -1756,6 +2212,20 @@ export default function App() {
         isOpen={isShopLocationMapOpen}
         onClose={() => setIsShopLocationMapOpen(false)}
         lang={lang}
+      />
+
+      {/* Persistent Incoming Order Ringtone Alert Bar (rings until hotel owner confirms) */}
+      <IncomingOrderRingtoneAlert
+        orders={orders}
+        lang={lang}
+        onConfirmOrder={handleHotelOwnerConfirmOrder}
+        onStartCooking={(orderId) => handleUpdateOrderStatus(orderId, 'cooking')}
+        onOpenAdminOrders={() => {
+          setIsAdmin(true);
+          setAdminViewMode('admin');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        isAdmin={isAdmin}
       />
     </div>
   );

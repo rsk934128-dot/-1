@@ -5,7 +5,7 @@
    ---------------------------------------------------- */
 @media print {
   @page {
-    margin: 4mm;
+    margin: 2mm;
     size: auto;
   }
 
@@ -13,7 +13,7 @@
   body, html {
     background: #ffffff !important;
     color: #000000 !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
   }
 
   /* Hide all regular web UI elements during receipt print */
@@ -22,9 +22,49 @@
   footer, 
   .no-print,
   #modal-backdrop,
-  .fixed:not(#printable-receipt-area),
+  .fixed:not(#printable-receipt-area):not(.thermal-modal-container),
   button:not(.print-include) {
     display: none !important;
+  }
+
+  /* When printing from ThermalReceiptView modal */
+  .thermal-modal-container {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .thermal-modal-container > div {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    max-height: none !important;
+    overflow: visible !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #dedicated-thermal-receipt {
+    display: block !important;
+    position: static !important;
+    margin: 0 auto !important;
+    padding: 2mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    visibility: visible !important;
+  }
+
+  #dedicated-thermal-receipt * {
+    visibility: visible !important;
+    color: #000000 !important;
   }
 
   /* When printing from printOrderReceipt helper or standalone receipt */

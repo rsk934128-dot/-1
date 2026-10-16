@@ -7,10 +7,11 @@ export const HOTEL_INFO: HotelInfo = {
   taglineEn: 'The most trusted destination for fresh homemade meals at Station Area',
   proprietorBn: 'মোহাম্মদ আব্দুল বারিক শেখ',
   proprietorEn: 'Mohammad Abdul Barik Sheikh',
+  proprietorPhone: '+8801775339836',
   locationBn: 'রেলওয়ে স্টেশন মেইন গেট সংলগ্ন, স্টেশন রোড',
   locationEn: 'Adjacent to Railway Station Main Gate, Station Road',
-  phone1: '01775339836',
-  phone2: '01761869921',
+  phone1: '01761869921',
+  phone2: '+8801775339836',
   email: 'fs2217732@gmail.com',
   openingHoursBn: 'প্রতিদিন সকাল ৬:০০ টা থেকে রাত ১২:০০ টা পর্যন্ত উন্মুক্ত',
   openingHoursEn: 'Open Daily from 6:00 AM to 12:00 Midnight',
@@ -388,6 +389,40 @@ export const INITIAL_ORDERS: Order[] = [
     status: 'completed',
     createdAt: '১ ঘণ্টা আগে',
     estimatedDeliveryMinutes: 0,
+    mealRating: {
+      overallRating: 5,
+      serviceRating: 5,
+      overallComment: 'গরুর মাংসের ঝোল ও গরম ভাত অসাধারণ ছিল! ডেলিভারিও খুব দ্রুত পেয়েছি।',
+      quickTags: ['গরম ও টাটকা', 'খাঁটি ঘরোয়া স্বাদ', 'দ্রুত ডেলিভারি'],
+      itemFeedbacks: [
+        {
+          foodId: 'f2',
+          foodNameBn: 'সাদা ভাত (সুগন্ধি চাল)',
+          foodNameEn: 'Steamed Rice',
+          rating: 5,
+          tags: ['গরম ও টাটকা'],
+          note: 'ভাত একদম ঝরঝরে ও গরম ছিল',
+        },
+        {
+          foodId: 'f7',
+          foodNameBn: 'কষা গরুর মাংস (স্পেশাল ভুনা)',
+          foodNameEn: 'Special Beef Curry',
+          rating: 5,
+          tags: ['নরম ও সুসিদ্ধ', 'ঝাল ও মশলা সঠিক'],
+          note: 'মাংস নরম আর তুলতুলে',
+        },
+        {
+          foodId: 'f5',
+          foodNameBn: 'ঘি-বাগার মসুর ডাল',
+          foodNameEn: 'Lentil Soup / Dal',
+          rating: 5,
+          tags: ['সুগন্ধি ঘিয়ের ঘ্রাণ'],
+        }
+      ],
+      ratedAt: '১ ঘণ্টা আগে',
+      customerName: 'মো: শরিফুল ইসলাম',
+      awardedPoints: 15,
+    },
   },
 ];
 
@@ -446,7 +481,7 @@ export const INITIAL_RESERVATIONS: TableReservation[] = [
   {
     id: 'RES-8421',
     customerName: 'মো: ফখরুল ইসলাম',
-    customerPhone: '01775-339836',
+    customerPhone: '01761-869921',
     customerEmail: 'fs2217732@gmail.com',
     guestCount: 4,
     date: '2026-08-27',
@@ -461,7 +496,7 @@ export const INITIAL_RESERVATIONS: TableReservation[] = [
   {
     id: 'RES-7319',
     customerName: 'মো: ফখরুল ইসলাম',
-    customerPhone: '01775-339836',
+    customerPhone: '01761-869921',
     customerEmail: 'fs2217732@gmail.com',
     guestCount: 6,
     date: '2026-08-29',

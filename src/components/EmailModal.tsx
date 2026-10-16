@@ -38,7 +38,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
   const [emailPurpose, setEmailPurpose] = useState<string>(targetOrder ? 'invoice' : 'catering');
   const [messageBody, setMessageBody] = useState<string>(
     targetOrder
-      ? `সম্মানিত গ্রাহক,\nহোটেল আল শেখ ফরিদ-এ আপনার অর্ডার (#${targetOrder.id}) সফলভাবে নিশ্চিত হয়েছে।\n\nমোট পরিশোধিত: ৳ ${targetOrder.total}\nপেমেন্ট মেথড: ${targetOrder.paymentMethod}\n\nধন্যবাদান্তে,\nমোহাম্মদ আব্দুল বারিক শেখ\nপ্রোপাইটার, হোটেল আল শেখ ফরিদ\nমোবাইল: ${HOTEL_INFO.phone1}`
+      ? `সম্মানিত গ্রাহক,\nহোটেল আল শেখ ফরিদ-এ আপনার অর্ডার (#${targetOrder.id}) সফলভাবে নিশ্চিত হয়েছে।\n\nমোট পরিশোধিত: ৳ ${targetOrder.total}\nপেমেন্ট মেথড: ${targetOrder.paymentMethod}\n\nধন্যবাদান্তে,\nমোহাম্মদ আব্দুল বারিক শেখ\nপ্রোপাইটার, হোটেল আল শেখ ফরিদ\nমালিকের মোবাইল: ${HOTEL_INFO.phone2} | হেল্পলাইন: ${HOTEL_INFO.phone1}`
       : `আসসালামু আলাইকুম আব্দুল বারিক শেখ সাহেব,\nআমরা স্টেশন এলাকা থেকে আগামীকালের জন্য ৫০ জনের খাবার (খিচুড়ি, কষা গরুর মাংস, জিলাপি ও চা) অগ্রিম বুকিং করতে চাই। বিস্তারিত জানাতে অনুরোধ করছি।`
   );
   const [isSent, setIsSent] = useState<boolean>(false);
@@ -50,7 +50,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({
       setCustomerEmail(targetOrder.customerEmail || 'customer@gmail.com');
       setCustomerPhone(targetOrder.customerPhone);
       setEmailPurpose('invoice');
-      setMessageBody(`সম্মানিত গ্রাহক,\nহোটেল আল শেখ ফরিদ-এ আপনার অর্ডার (#${targetOrder.id}) সফলভাবে নিশ্চিত হয়েছে।\n\nমোট পরিশোধিত: ৳ ${targetOrder.total}\nপেমেন্ট মেথড: ${targetOrder.paymentMethod}\n\nধন্যবাদান্তে,\nমোহাম্মদ আব্দুল বারিক শেখ\nপ্রোপাইটার, হোটেল আল শেখ ফরিদ\nমোবাইল: ${HOTEL_INFO.phone1}`);
+      setMessageBody(`সম্মানিত গ্রাহক,\nহোটেল আল শেখ ফরিদ-এ আপনার অর্ডার (#${targetOrder.id}) সফলভাবে নিশ্চিত হয়েছে।\n\nমোট পরিশোধিত: ৳ ${targetOrder.total}\nপেমেন্ট মেথড: ${targetOrder.paymentMethod}\n\nধন্যবাদান্তে,\nমোহাম্মদ আব্দুল বারিক শেখ\nপ্রোপাইটার, হোটেল আল শেখ ফরিদ\nমালিকের মোবাইল: ${HOTEL_INFO.phone2} | হেল্পলাইন: ${HOTEL_INFO.phone1}`);
     }
   }, [targetOrder]);
 

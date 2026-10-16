@@ -357,16 +357,23 @@ export const Banner: React.FC<BannerProps> = ({
           </p>
         </div>
 
-        {/* Hotline & bKash Strip */}
+        {/* Hotline & Owner & bKash Strip */}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <a 
+            href={`tel:${HOTEL_INFO.phone2}`} 
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/50 font-mono transition-colors shadow-2xs"
+            title={lang === 'bn' ? 'হোটেল মালিক আব্দুল বারিক শেখকে সরাসরি কল দিন' : 'Call Hotel Owner'}
+          >
+            <span className="text-amber-400 font-sans font-bold">👑 {lang === 'bn' ? 'মালিক (আব্দুল বারিক শেখ)' : 'Owner'}:</span> {HOTEL_INFO.phone2}
+          </a>
           <a 
             href={`tel:${HOTEL_INFO.phone1}`} 
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 text-stone-200 border border-stone-700 font-mono transition-colors"
           >
-            <span className="text-emerald-400 font-sans font-bold">📞 {lang === 'bn' ? 'হটলাইন' : 'Call'}:</span> {HOTEL_INFO.phone1}
+            <span className="text-emerald-400 font-sans font-bold">📞 {lang === 'bn' ? 'হেল্পলাইন' : 'Helpline'}:</span> {HOTEL_INFO.phone1}
           </a>
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-950/70 text-pink-300 border border-pink-500/40 font-mono">
-            <span className="text-pink-400 font-sans font-bold">{lang === 'bn' ? 'বিকাশ (পার্সোনাল)' : 'bKash'}:</span> {HOTEL_INFO.bkashNumber}
+            <span className="text-pink-400 font-sans font-bold">{lang === 'bn' ? 'বিকাশ' : 'bKash'}:</span> {HOTEL_INFO.bkashNumber}
           </span>
           <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-stone-400">
             <Clock className="w-3 h-3 text-amber-400" />

@@ -237,10 +237,10 @@ export const PrintableDailyMenuModal: React.FC<PrintableDailyMenuModalProps> = (
                 </h1>
                 <p className="text-xs font-bold text-stone-600">{HOTEL_INFO.nameEn}</p>
                 <div className="text-[11px] text-stone-600 mt-1 space-y-0.5">
-                  <p>প্রোপাইটার: <strong>{HOTEL_INFO.proprietorBn}</strong></p>
+                  <p>প্রোপাইটার: <strong>{HOTEL_INFO.proprietorBn}</strong> ({HOTEL_INFO.phone2})</p>
                   <p className="flex items-center gap-1"><MapPin className="w-3 h-3 text-stone-500" /> {HOTEL_INFO.locationBn}</p>
                   <p className="flex items-center gap-1 text-blue-700 font-bold">
-                    <Phone className="w-3 h-3" /> {HOTEL_INFO.phone1} | {HOTEL_INFO.phone2}
+                    <Phone className="w-3 h-3" /> মালিক: {HOTEL_INFO.phone2} | হেল্পলাইন: {HOTEL_INFO.phone1}
                   </p>
                 </div>
               </div>
@@ -334,7 +334,7 @@ export const PrintableDailyMenuModal: React.FC<PrintableDailyMenuModalProps> = (
               </div>
 
               <div className="text-center sm:text-right font-mono text-[11px] text-amber-900 font-bold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-                হটলাইন: 01775339836
+                হটলাইন ও WhatsApp: 01761869921
               </div>
             </div>
 

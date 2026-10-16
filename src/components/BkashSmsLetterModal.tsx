@@ -200,7 +200,7 @@ export const BkashSmsLetterModal: React.FC<BkashSmsLetterModalProps> = ({
                   type="button"
                   onClick={() => {
                     const sampleTrx = 'BK' + Math.random().toString(36).substring(2, 9).toUpperCase();
-                    setManualText(`You have received Tk 450.00 from 01775339836. Ref Order-1024. Fee Tk 0.00. Balance Tk 18,900.00. TrxID ${sampleTrx} at 20/08/2026 11:15 AM.`);
+                    setManualText(`You have received Tk 450.00 from 01712345678. Ref Order-1024. Fee Tk 0.00. Balance Tk 18,900.00. TrxID ${sampleTrx} at 20/08/2026 11:15 AM.`);
                   }}
                   className="text-pink-700 font-bold hover:underline cursor-pointer"
                 >

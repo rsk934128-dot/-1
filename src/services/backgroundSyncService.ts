@@ -1,5 +1,6 @@
 import { SoundNotificationService } from './soundNotificationService';
 import { PushNotificationPayload } from './notificationService';
+import { safeStorage } from '../utils/safeStorage';
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -57,9 +58,9 @@ class BackgroundSyncServiceClass {
   constructor() {
     if (typeof window !== 'undefined') {
       this.isMinimized = document.visibilityState === 'hidden';
-      this.wakeLockRequested = localStorage.getItem('al_sheikh_wake_lock_enabled') === 'true';
+      this.wakeLockRequested = safeStorage.getItem('al_sheikh_wake_lock_enabled') === 'true';
 
-      const savedPref = localStorage.getItem('al_sheikh_low_power_pref') as LowPowerPreference;
+      const savedPref = safeStorage.getItem('al_sheikh_low_power_pref') as LowPowerPreference;
       if (savedPref && ['auto', 'enabled', 'disabled'].includes(savedPref)) {
         this.lowPowerPreference = savedPref;
       }
@@ -255,9 +256,7 @@ class BackgroundSyncServiceClass {
    */
   public setLowPowerModePreference(pref: LowPowerPreference): void {
     this.lowPowerPreference = pref;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('al_sheikh_low_power_pref', pref);
-    }
+    safeStorage.setItem('al_sheikh_low_power_pref', pref);
     this.evaluateLowPowerMode();
   }
 
@@ -329,55 +328,85 @@ class BackgroundSyncServiceClass {
   }
 
   /**
-   * Spawns a background Web Worker using a Blob URL so background timers
-   * do not freeze or get throttled as aggressively on mobile devices.
+   * Spawns a background timer with Web Worker or reliable interval fallback.
+   * Catches worker errors gracefully to prevent cross-origin "Script error." in iframes.
    */
   private initHeartbeatWorker() {
-    if (typeof window === 'undefined' || typeof Worker === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
-    try {
-      const workerCode = `
-        let intervalId = null;
-        let intervalMs = 5000;
-        self.onmessage = function(e) {
-          if (e.data && e.data.type === 'start') {
-            intervalMs = e.data.interval || 5000;
-            if (intervalId) clearInterval(intervalId);
-            intervalId = setInterval(function() {
-              self.postMessage({ type: 'TICK', timestamp: Date.now() });
-            }, intervalMs);
-          } else if (e.data && e.data.type === 'set_interval') {
-            intervalMs = e.data.interval || 5000;
-            if (intervalId) clearInterval(intervalId);
-            intervalId = setInterval(function() {
-              self.postMessage({ type: 'TICK', timestamp: Date.now() });
-            }, intervalMs);
-          } else if (e.data === 'stop') {
-            if (intervalId) clearInterval(intervalId);
-          }
-        };
-      `;
-      const blob = new Blob([workerCode], { type: 'application/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
-      this.heartbeatWorker = new Worker(blobUrl);
-
-      this.heartbeatWorker.onmessage = (e) => {
-        if (e.data && e.data.type === 'TICK') {
-          this.lastHeartbeat = e.data.timestamp;
-          // Ping the service worker to keep channel fresh
-          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'PING' });
-          }
-        }
-      };
-
-      this.heartbeatWorker.postMessage({ type: 'start', interval: this.syncIntervalMs });
-    } catch {
-      // Fallback to standard interval
+    const startFallbackTimer = () => {
+      if (this.fallbackIntervalId) clearInterval(this.fallbackIntervalId);
       this.fallbackIntervalId = setInterval(() => {
         this.lastHeartbeat = Date.now();
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.controller) {
+          try {
+            navigator.serviceWorker.controller.postMessage({ type: 'PING' });
+          } catch {}
+        }
+        this.notifyState();
       }, this.syncIntervalMs);
+    };
+
+    const isInsideIframe = typeof window !== 'undefined' && window.self !== window.top;
+    if (isInsideIframe) {
+      // In sandboxed iframes (e.g. AI Studio preview), Blob Web Workers can trigger CSP "Script error."
+      // Use rock-solid interval fallback directly.
+      startFallbackTimer();
+      return;
     }
+
+    if (typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
+      try {
+        const workerCode = `
+          let intervalId = null;
+          self.onmessage = function(e) {
+            if (e.data && (e.data.type === 'start' || e.data.type === 'set_interval')) {
+              if (intervalId) clearInterval(intervalId);
+              intervalId = setInterval(function() {
+                self.postMessage({ type: 'TICK', timestamp: Date.now() });
+              }, e.data.interval || 5000);
+            } else if (e.data === 'stop') {
+              if (intervalId) clearInterval(intervalId);
+            }
+          };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
+        const worker = new Worker(blobUrl);
+
+        worker.onerror = (e) => {
+          if (e && typeof e.preventDefault === 'function') {
+            e.preventDefault();
+          }
+          console.warn('[BackgroundSync] Worker error caught, switching to fallback timer');
+          if (this.heartbeatWorker) {
+            try { this.heartbeatWorker.terminate(); } catch {}
+            this.heartbeatWorker = null;
+          }
+          startFallbackTimer();
+        };
+
+        worker.onmessage = (e) => {
+          if (e.data && e.data.type === 'TICK') {
+            this.lastHeartbeat = e.data.timestamp;
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+              try {
+                navigator.serviceWorker.controller.postMessage({ type: 'PING' });
+              } catch {}
+            }
+          }
+        };
+
+        this.heartbeatWorker = worker;
+        worker.postMessage({ type: 'start', interval: this.syncIntervalMs });
+        URL.revokeObjectURL(blobUrl);
+        return;
+      } catch (err) {
+        console.warn('[BackgroundSync] Worker instantiation skipped, using safe interval timer:', err);
+      }
+    }
+
+    startFallbackTimer();
   }
 
   /**
@@ -414,7 +443,7 @@ class BackgroundSyncServiceClass {
     try {
       this.wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
       this.wakeLockRequested = true;
-      localStorage.setItem('al_sheikh_wake_lock_enabled', 'true');
+      safeStorage.setItem('al_sheikh_wake_lock_enabled', 'true');
 
       this.wakeLockSentinel.addEventListener('release', () => {
         this.wakeLockSentinel = null;
@@ -435,7 +464,7 @@ class BackgroundSyncServiceClass {
    */
   public async releaseWakeLock(): Promise<void> {
     this.wakeLockRequested = false;
-    localStorage.setItem('al_sheikh_wake_lock_enabled', 'false');
+    safeStorage.setItem('al_sheikh_wake_lock_enabled', 'false');
 
     if (this.wakeLockSentinel) {
       try {

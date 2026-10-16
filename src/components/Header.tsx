@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   Phone, 
   Video, 
+  PhoneCall,
   MessageSquare, 
   Mail, 
   ShoppingBag, 
@@ -29,7 +30,8 @@ import {
   Flame,
   ScanLine,
   Radio,
-  BatteryLow
+  BatteryLow,
+  Eye
 } from 'lucide-react';
 import { HOTEL_INFO } from '../data/initialData';
 import { ActiveTableSession, UserProfile } from '../types';
@@ -40,7 +42,7 @@ interface HeaderProps {
   cartCount: number;
   onOpenCart: () => void;
   onOpenAccount: () => void;
-  onOpenTableBooking?: () => void;
+  onOpenTableBooking: () => void;
   onOpenTableQrScanner?: () => void;
   activeTableSession?: ActiveTableSession | null;
   onOpenShopLocationMap?: () => void;
@@ -48,6 +50,7 @@ interface HeaderProps {
   onOpenShareAndQr?: () => void;
   onOpenSaaSMarketplace?: () => void;
   onStartCall: (type: 'audio' | 'video') => void;
+  onOpenCallHistory?: () => void;
   onOpenChat: () => void;
   onOpenEmail: () => void;
   onOpenAi: () => void;
@@ -60,6 +63,10 @@ interface HeaderProps {
   unreadSmsCount?: number;
   isAdmin: boolean;
   onToggleAdmin: () => void;
+  onOpenAdminAuth?: () => void;
+  adminViewMode?: 'admin' | 'customer_preview';
+  onToggleAdminViewMode?: () => void;
+  onExitAdmin?: () => void;
   isStaffMode?: boolean;
   onToggleStaffMode?: () => void;
   lang: 'bn' | 'en';
@@ -84,6 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShareAndQr,
   onOpenSaaSMarketplace,
   onStartCall,
+  onOpenCallHistory,
   onOpenChat,
   onOpenEmail,
   onOpenAi,
@@ -96,6 +104,10 @@ export const Header: React.FC<HeaderProps> = ({
   unreadSmsCount = 0,
   isAdmin,
   onToggleAdmin,
+  onOpenAdminAuth,
+  adminViewMode = 'admin',
+  onToggleAdminViewMode,
+  onExitAdmin,
   isStaffMode = false,
   onToggleStaffMode,
   lang,
@@ -232,11 +244,16 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          <span className="hidden md:inline-block bg-black/20 px-2 py-0.5 rounded text-[11px] border border-white/20">
-            {lang === 'bn' ? `প্রোপাইটার: ${HOTEL_INFO.proprietorBn}` : `Proprietor: ${HOTEL_INFO.proprietorEn}`}
-          </span>
-          {/* Staff Mode Toggle Pill in Top Bar */}
-          {onToggleStaffMode && (
+          <a 
+            href={`tel:${HOTEL_INFO.phone2}`}
+            className="hidden md:inline-flex items-center gap-1.5 bg-black/25 hover:bg-black/40 px-2.5 py-0.5 rounded-full text-[11px] border border-white/25 text-amber-200 hover:text-white transition-all shadow-2xs"
+            title={lang === 'bn' ? 'হোটেল মালিককে সরাসরি কল দিন' : 'Call Hotel Owner'}
+          >
+            <Phone className="w-3 h-3 text-amber-300 animate-pulse" />
+            <span>{lang === 'bn' ? `মালিক: ${HOTEL_INFO.proprietorBn} (${HOTEL_INFO.phone2})` : `Owner: ${HOTEL_INFO.proprietorEn} (${HOTEL_INFO.phone2})`}</span>
+          </a>
+          {/* Staff Mode Toggle Pill in Top Bar (Admin Only) */}
+          {isAdmin && onToggleStaffMode && (
             <button
               id="header-staff-mode-toggle"
               onClick={onToggleStaffMode}
@@ -252,18 +269,58 @@ export const Header: React.FC<HeaderProps> = ({
               {isStaffMode && <span className="w-1.5 h-1.5 rounded-full bg-emerald-700 animate-pulse"></span>}
             </button>
           )}
-          <button
-            onClick={onToggleAdmin}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all flex items-center gap-1 ${
-              isAdmin 
-                ? 'bg-emerald-500 text-white shadow-xs' 
-                : 'bg-black/30 text-amber-200 hover:bg-black/50 hover:text-white'
-            }`}
-            title="মালিক / ম্যানেজার প্যানেল"
-          >
-            <ShieldCheck className="w-3 h-3" />
-            {isAdmin ? (lang === 'bn' ? 'মালিক মোড সক্রিয়' : 'Owner Mode ON') : (lang === 'bn' ? 'মালিক প্যানেল' : 'Owner Mode')}
-          </button>
+
+          {/* Admin & Role Controls */}
+          {isAdmin ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleAdmin}
+                className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                title={lang === 'bn' ? 'অ্যাডমিন ড্যাশবোর্ড প্রদর্শন করুন' : 'Toggle Admin Dashboard'}
+              >
+                <ShieldCheck className="w-3 h-3" />
+                <span>{lang === 'bn' ? 'অ্যাডমিন প্যানেল' : 'Admin Panel'}</span>
+              </button>
+
+              {onToggleAdminViewMode && (
+                <button
+                  type="button"
+                  onClick={onToggleAdminViewMode}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                    adminViewMode === 'customer_preview'
+                      ? 'bg-amber-400 text-stone-950 font-black ring-1 ring-white/60'
+                      : 'bg-black/30 text-amber-200 hover:bg-black/50 hover:text-white'
+                  }`}
+                  title={adminViewMode === 'customer_preview' ? 'কাস্টমার প্রিভিউ চলছে (অ্যাডমিন ভিউতে ফিরুন)' : 'কাস্টমাররা কী দেখতে পান তা প্রিভিউ করুন'}
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>{adminViewMode === 'customer_preview' ? (lang === 'bn' ? 'কাস্টমার প্রিভিউ' : 'Customer View') : (lang === 'bn' ? 'কাস্টমার প্রিভিউ' : 'Preview Customer')}</span>
+                </button>
+              )}
+
+              {onExitAdmin && (
+                <button
+                  type="button"
+                  onClick={onExitAdmin}
+                  className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-600/80 hover:bg-red-600 text-white transition-all cursor-pointer"
+                  title="অ্যাডমিন মোড থেকে প্রস্থান করুন"
+                >
+                  {lang === 'bn' ? 'প্রস্থান' : 'Exit'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenAdminAuth}
+              className="bg-black/30 hover:bg-black/50 text-amber-200 hover:text-white px-2 py-0.5 rounded text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer border border-white/15"
+              title="হোটেল মালিক ও অ্যাডমিন লগইন"
+            >
+              <Crown className="w-3 h-3 text-amber-400" />
+              <span>{lang === 'bn' ? 'এডমিন লগইন' : 'Admin Login'}</span>
+            </button>
+          )}
           <button
             onClick={onToggleLang}
             className="bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded text-[11px] font-bold border border-white/20 text-white"
@@ -296,8 +353,8 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <p className="text-xs text-stone-600 font-medium line-clamp-1">
                 {lang === 'bn' 
-                  ? `প্রোপাইটার: ${HOTEL_INFO.proprietorBn} | 📞 ${HOTEL_INFO.phone1}, ${HOTEL_INFO.phone2}` 
-                  : `Proprietor: ${HOTEL_INFO.proprietorEn} | 📞 ${HOTEL_INFO.phone1}`}
+                  ? `মালিক: ${HOTEL_INFO.proprietorBn} (${HOTEL_INFO.phone2}) | 📞 হেল্পলাইন ও WhatsApp: ${HOTEL_INFO.phone1}` 
+                  : `Owner: ${HOTEL_INFO.proprietorEn} (${HOTEL_INFO.phone2}) | 📞 Helpline & WhatsApp: ${HOTEL_INFO.phone1}`}
               </p>
             </div>
           </div>
@@ -322,21 +379,32 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onStartCall('audio')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border border-emerald-200 shadow-xs transition-colors"
-              title="হোটেল ম্যানেজারের সাথে অডিও কল করুন"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 shadow-sm transition-all cursor-pointer active:scale-95"
+              title="হোটেল মালিককে সরাসরি লাইভ কল করুন (রিংটোন সহ সংযোগ)"
             >
-              <Phone className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-              <span>{lang === 'bn' ? 'অডিও কল' : 'Audio Call'}</span>
+              <Phone className="w-3.5 h-3.5 text-white animate-bounce" />
+              <span>{lang === 'bn' ? 'মালিককে কল করুন' : 'Call Owner'}</span>
             </button>
 
             <button
               onClick={() => onStartCall('video')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-blue-700 hover:bg-blue-50 hover:text-blue-800 border border-blue-200 shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-blue-700 hover:bg-blue-50 hover:text-blue-800 border border-blue-200 shadow-xs transition-colors cursor-pointer"
               title="হোটেল কাউন্টারে সরাসরি ভিডিও কল করুন"
             >
               <Video className="w-3.5 h-3.5 text-blue-600" />
               <span>{lang === 'bn' ? 'ভিডিও কল' : 'Video Call'}</span>
             </button>
+
+            {onOpenCallHistory && (
+              <button
+                onClick={onOpenCallHistory}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50/80 text-amber-900 hover:bg-amber-100 border border-amber-300 shadow-xs transition-colors cursor-pointer"
+                title={lang === 'bn' ? 'অডিও ও ভিডিও কল হিস্ট্রি দেখুন' : 'View Call History'}
+              >
+                <PhoneCall className="w-3.5 h-3.5 text-amber-700" />
+                <span>{lang === 'bn' ? 'কল হিস্ট্রি' : 'Call History'}</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenChat}
@@ -421,8 +489,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Staff Mode Desktop Toggle Button */}
-            {onToggleStaffMode && (
+            {/* Staff Mode Desktop Toggle Button (Admin Only) */}
+            {isAdmin && onToggleStaffMode && (
               <button
                 id="desktop-staff-mode-btn"
                 onClick={onToggleStaffMode}
@@ -591,10 +659,10 @@ export const Header: React.FC<HeaderProps> = ({
                 setMobileMenuOpen(false);
                 onStartCall('audio');
               }}
-              className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold"
+              className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold shadow-xs cursor-pointer"
             >
-              <Phone className="w-4 h-4 text-emerald-600" />
-              <span>{lang === 'bn' ? 'অডিও কল' : 'Audio Call'}</span>
+              <Phone className="w-4 h-4 text-white animate-bounce" />
+              <span>{lang === 'bn' ? 'মালিককে কল করুন' : 'Call Owner'}</span>
             </button>
 
             <button
@@ -607,6 +675,19 @@ export const Header: React.FC<HeaderProps> = ({
               <Video className="w-4 h-4 text-blue-600" />
               <span>{lang === 'bn' ? 'ভিডিও কল' : 'Video Call'}</span>
             </button>
+
+            {onOpenCallHistory && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenCallHistory();
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-bold"
+              >
+                <PhoneCall className="w-4 h-4 text-amber-700" />
+                <span>{lang === 'bn' ? 'কল হিস্ট্রি' : 'Call History'}</span>
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -728,8 +809,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Mobile Staff Mode Button */}
-            {onToggleStaffMode && (
+            {/* Mobile Staff Mode Button (Admin Only) */}
+            {isAdmin && onToggleStaffMode && (
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);

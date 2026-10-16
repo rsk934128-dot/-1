@@ -207,9 +207,9 @@ export const printOrderReceipt = (order: Order, lang: 'bn' | 'en' = 'bn'): void 
         <div class="header">
           <div class="title">${HOTEL_INFO.nameBn}</div>
           <div class="subtitle">${HOTEL_INFO.nameEn}</div>
-          <div class="hotel-contact">প্রোপাইটার: ${HOTEL_INFO.proprietorBn}</div>
+          <div class="hotel-contact">প্রোপাইটার: ${HOTEL_INFO.proprietorBn} (${HOTEL_INFO.phone2})</div>
           <div class="hotel-contact">${HOTEL_INFO.locationBn}</div>
-          <div class="hotel-contact">মোবাইল: ${HOTEL_INFO.phone1}, ${HOTEL_INFO.phone2}</div>
+          <div class="hotel-contact">হেল্পলাইন ও WhatsApp: ${HOTEL_INFO.phone1}</div>
           <div class="badge">গ্রাহক রসিদ ও কিচেন টোকেন</div>
         </div>
 

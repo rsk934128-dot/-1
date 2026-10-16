@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
+  Phone,
   PhoneOff, 
   Mic, 
   MicOff, 
@@ -8,22 +9,19 @@ import {
   Volume2, 
   VolumeX, 
   Camera, 
-  Sparkles, 
-  Check, 
   ShieldCheck, 
-  UserCheck, 
   Store,
   Wifi,
   Activity,
-  Maximize2,
-  Minimize2,
   Users,
-  Info,
-  Radio
+  Radio,
+  Sparkles
 } from 'lucide-react';
 import { HOTEL_INFO } from '../data/initialData';
-import { CallType, SUPER_ADMIN_EMAILS } from '../types';
+import { CallType } from '../types';
 import { webrtcCallManager } from '../services/webrtcService';
+import { ringtoneService } from '../utils/ringtoneService';
+import { callSignalingService } from '../services/callSignalingService';
 
 interface CallModalProps {
   isOpen: boolean;
@@ -31,9 +29,14 @@ interface CallModalProps {
   initialType: CallType;
   lang: 'bn' | 'en';
   currentUserRole?: 'admin' | 'customer';
+  callerEmail?: string;
   currentAdminEmail?: string;
   targetCustomerName?: string;
   targetCustomerPhone?: string;
+  isIncomingReceived?: boolean;
+  activeCallId?: string;
+  onOpenCallHistory?: () => void;
+  onCallFinished?: (durationSeconds: number) => void;
 }
 
 export const CallModal: React.FC<CallModalProps> = ({
@@ -42,9 +45,14 @@ export const CallModal: React.FC<CallModalProps> = ({
   initialType,
   lang,
   currentUserRole = 'customer',
+  callerEmail,
   currentAdminEmail = 'fs2217732@gmail.com',
-  targetCustomerName = 'যাত্রী / কাস্টমার',
-  targetCustomerPhone = '01700-112233',
+  targetCustomerName = 'অনলাইন কাস্টমার / অতিথি',
+  targetCustomerPhone = '01761869921',
+  isIncomingReceived = false,
+  activeCallId,
+  onOpenCallHistory,
+  onCallFinished,
 }) => {
   const [callType, setCallType] = useState<CallType>(initialType);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -52,51 +60,89 @@ export const CallModal: React.FC<CallModalProps> = ({
   const [isSpeakerMuted, setIsSpeakerMuted] = useState<boolean>(false);
   const [callDuration, setCallDuration] = useState<number>(0);
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
-  const [connectionState, setConnectionState] = useState<'signaling' | 'connecting' | 'connected'>('signaling');
+  
+  // Phase: 'calling' (outgoing ring) -> 'connected' (live conversation)
+  const [callPhase, setCallPhase] = useState<'calling' | 'connected'>(
+    isIncomingReceived ? 'connected' : 'calling'
+  );
   const [showStats, setShowStats] = useState<boolean>(false);
   const [audioLevels, setAudioLevels] = useState<number[]>([30, 45, 60, 45, 30]);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const audioVisualizerInterval = useRef<any>(null);
 
+  // Initialize call state & outgoing ringtone
   useEffect(() => {
     if (isOpen) {
       setCallType(initialType);
       setCallDuration(0);
       setIsMuted(false);
       setIsVideoOff(false);
-      setConnectionState('signaling');
 
-      // WebRTC ICE / SDP connection handshake simulation
-      const t1 = setTimeout(() => setConnectionState('connecting'), 1200);
-      const t2 = setTimeout(() => setConnectionState('connected'), 2600);
+      if (isIncomingReceived) {
+        setCallPhase('connected');
+        ringtoneService.stop();
+        ringtoneService.playCallConnected();
+      } else {
+        setCallPhase('calling');
+        // Play realistic outgoing telephone ring tone (calling the owner)
+        ringtoneService.startOutgoingRing(0.5);
 
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-      };
+        // Listen for call acceptance or decline via signaling
+        const unsubscribe = callSignalingService.subscribe((signal) => {
+          if (signal.action === 'accept') {
+            ringtoneService.stop();
+            ringtoneService.playCallConnected();
+            setCallPhase('connected');
+          } else if (signal.action === 'decline') {
+            ringtoneService.stop();
+            ringtoneService.playCallEnded();
+            onClose();
+          }
+        });
+
+        // Ringing duration timeout after 50 seconds if unanswered
+        const unansweredTimeout = setTimeout(() => {
+          setCallPhase((current) => {
+            if (current === 'calling') {
+              ringtoneService.stop();
+              ringtoneService.playCallEnded();
+              if (activeCallId) {
+                callSignalingService.endCall(activeCallId, 0);
+              }
+              if (onCallFinished) {
+                onCallFinished(0);
+              }
+              onClose();
+            }
+            return current;
+          });
+        }, 50000);
+
+        return () => {
+          unsubscribe();
+          clearTimeout(unansweredTimeout);
+          ringtoneService.stop();
+        };
+      }
+    } else {
+      ringtoneService.stop();
+      webrtcCallManager.hangup();
     }
-  }, [isOpen, initialType]);
+  }, [isOpen, initialType, isIncomingReceived]);
 
-  // Call timer effect
+  // Duration timer once connected
   useEffect(() => {
-    if (!isOpen || connectionState !== 'connected') return;
+    if (!isOpen || callPhase !== 'connected') return;
     const timer = setInterval(() => {
       setCallDuration((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [isOpen, connectionState]);
+  }, [isOpen, callPhase]);
 
-  // WebRTC Media Stream Acquisition
+  // Media Stream Acquisition (Microphone & Camera) once connected
   useEffect(() => {
-    if (!isOpen) {
-      webrtcCallManager.hangup();
-      if (audioVisualizerInterval.current) {
-        clearInterval(audioVisualizerInterval.current);
-      }
-      return;
-    }
+    if (!isOpen || callPhase !== 'connected') return;
 
     let active = true;
 
@@ -116,7 +162,7 @@ export const CallModal: React.FC<CallModalProps> = ({
         }, 120);
 
       } catch (err) {
-        console.warn('WebRTC Stream Acquisition Error:', err);
+        console.warn('WebRTC Stream Acquisition notice:', err);
       }
     }
 
@@ -128,7 +174,7 @@ export const CallModal: React.FC<CallModalProps> = ({
         clearInterval(audioVisualizerInterval.current);
       }
     };
-  }, [isOpen, callType, cameraFacing]);
+  }, [isOpen, callPhase, callType, cameraFacing]);
 
   if (!isOpen) return null;
 
@@ -160,15 +206,32 @@ export const CallModal: React.FC<CallModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleManualAcceptAsOwner = () => {
+    ringtoneService.stop();
+    ringtoneService.playCallConnected();
+    setCallPhase('connected');
+    if (activeCallId) {
+      callSignalingService.acceptCall(activeCallId);
+    }
+  };
+
   const handleEndCall = () => {
+    ringtoneService.stop();
+    ringtoneService.playCallEnded();
     webrtcCallManager.hangup();
+    if (activeCallId) {
+      callSignalingService.endCall(activeCallId, callDuration);
+    }
+    if (onCallFinished) {
+      onCallFinished(callDuration);
+    }
     onClose();
   };
 
-  const isAdminCalling = currentUserRole === 'admin';
+  const isAdmin = currentUserRole === 'admin';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-stone-950/90 backdrop-blur-lg">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-stone-950/90 backdrop-blur-xl">
       <div className="bg-stone-900 text-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-amber-500/40 flex flex-col h-[640px] max-h-[94vh] relative animate-in fade-in zoom-in-95">
         
         {/* Top Floating WebRTC Status Header */}
@@ -176,17 +239,16 @@ export const CallModal: React.FC<CallModalProps> = ({
           {/* Connection Status Pill */}
           <div className="flex items-center gap-2 bg-stone-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-stone-700 pointer-events-auto shadow-md">
             <span className={`w-2.5 h-2.5 rounded-full ${
-              connectionState === 'connected' ? 'bg-emerald-500 animate-ping' : 'bg-amber-400 animate-pulse'
+              callPhase === 'connected' ? 'bg-emerald-500 animate-ping' : 'bg-amber-400 animate-pulse'
             }`} />
             <div className="flex items-center gap-1.5">
               <Radio className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-xs font-bold text-emerald-300">
-                {connectionState === 'signaling' && (lang === 'bn' ? 'WebRTC সিগন্যালিং...' : 'WebRTC Signaling...')}
-                {connectionState === 'connecting' && (lang === 'bn' ? 'ICE হ্যান্ডশেক...' : 'ICE Handshake...')}
-                {connectionState === 'connected' && (lang === 'bn' ? 'WebRTC লাইভ কল' : 'WebRTC Live P2P')}
+                {callPhase === 'calling' && (lang === 'bn' ? 'মালিকের ফোনে রিং হচ্ছে...' : 'Ringing Hotel Owner...')}
+                {callPhase === 'connected' && (lang === 'bn' ? 'WebRTC লাইভ কল চলছে' : 'WebRTC Live P2P Active')}
               </span>
             </div>
-            {connectionState === 'connected' && (
+            {callPhase === 'connected' && (
               <span className="text-xs text-amber-300 font-mono pl-1.5 border-l border-stone-700">
                 {formatDuration(callDuration)}
               </span>
@@ -195,24 +257,30 @@ export const CallModal: React.FC<CallModalProps> = ({
 
           {/* Quick Action Tools */}
           <div className="flex items-center gap-1.5 pointer-events-auto">
-            {/* Stats toggle */}
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className="bg-stone-950/80 hover:bg-stone-800 text-stone-300 text-xs font-semibold px-2.5 py-1.5 rounded-full border border-stone-700 backdrop-blur-md flex items-center gap-1 cursor-pointer"
-              title="WebRTC Stats"
-            >
-              <Activity className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">P2P Stats</span>
-            </button>
+            {callPhase === 'connected' && (
+              <>
+                {/* Stats toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowStats(!showStats)}
+                  className="bg-stone-950/80 hover:bg-stone-800 text-stone-300 text-xs font-semibold px-2.5 py-1.5 rounded-full border border-stone-700 backdrop-blur-md flex items-center gap-1 cursor-pointer"
+                  title="WebRTC Stats"
+                >
+                  <Activity className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">P2P Stats</span>
+                </button>
 
-            {/* Audio / Video Switcher */}
-            <button
-              onClick={() => setCallType(callType === 'video' ? 'audio' : 'video')}
-              className="bg-stone-950/80 hover:bg-stone-800 text-amber-300 text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-500/30 backdrop-blur-md flex items-center gap-1.5 cursor-pointer"
-            >
-              {callType === 'video' ? <Mic className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
-              <span>{callType === 'video' ? (lang === 'bn' ? 'অডিও মোড' : 'Audio Only') : (lang === 'bn' ? 'ভিডিও মোড' : 'Video Call')}</span>
-            </button>
+                {/* Audio / Video Switcher */}
+                <button
+                  type="button"
+                  onClick={() => setCallType(callType === 'video' ? 'audio' : 'video')}
+                  className="bg-stone-950/80 hover:bg-stone-800 text-amber-300 text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-500/30 backdrop-blur-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  {callType === 'video' ? <Mic className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+                  <span>{callType === 'video' ? (lang === 'bn' ? 'অডিও মোড' : 'Audio Only') : (lang === 'bn' ? 'ভিডিও মোড' : 'Video Call')}</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -222,31 +290,32 @@ export const CallModal: React.FC<CallModalProps> = ({
             <div className="flex items-center justify-between pb-2 border-b border-stone-800">
               <div className="flex items-center gap-1.5 text-amber-400 font-bold">
                 <Wifi className="w-4 h-4" />
-                <span>WebRTC PeerConnection Telemetry</span>
+                <span>WebRTC Audio/Video Diagnostics</span>
               </div>
               <button 
+                type="button"
                 onClick={() => setShowStats(false)}
-                className="text-stone-400 hover:text-white px-2 py-0.5 rounded bg-stone-800"
+                className="text-stone-400 hover:text-white px-2 py-0.5 rounded bg-stone-800 cursor-pointer"
               >
                 ✕
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px]">
               <div className="bg-stone-900 p-2 rounded-xl border border-stone-800">
-                <p className="text-stone-400">ICE State</p>
+                <p className="text-stone-400">ICE Connection</p>
                 <p className="text-emerald-400 font-bold">Connected (STUN Google)</p>
               </div>
               <div className="bg-stone-900 p-2 rounded-xl border border-stone-800">
-                <p className="text-stone-400">Audio / Video Codec</p>
-                <p className="text-amber-300 font-bold">Opus (48kHz) / VP8</p>
+                <p className="text-stone-400">Audio Codec</p>
+                <p className="text-amber-300 font-bold">Opus (48kHz Stereo)</p>
               </div>
               <div className="bg-stone-900 p-2 rounded-xl border border-stone-800">
-                <p className="text-stone-400">RTT Latency</p>
-                <p className="text-emerald-400 font-bold">18 ms • 0% Loss</p>
+                <p className="text-stone-400">Video Pipeline</p>
+                <p className="text-emerald-400 font-bold">VP8 720p HD (30fps)</p>
               </div>
               <div className="bg-stone-900 p-2 rounded-xl border border-stone-800">
-                <p className="text-stone-400">P2P Encryption</p>
-                <p className="text-blue-400 font-bold">DTLS-SRTP 256-bit</p>
+                <p className="text-stone-400">Latency & Security</p>
+                <p className="text-blue-400 font-bold">14 ms • E2E Encrypted</p>
               </div>
             </div>
           </div>
@@ -254,9 +323,98 @@ export const CallModal: React.FC<CallModalProps> = ({
 
         {/* Video / Audio Main WebRTC Stage */}
         <div className="relative flex-1 bg-stone-950 flex items-center justify-center overflow-hidden">
-          {callType === 'video' ? (
+          {callPhase === 'calling' ? (
+            /* Calling / Ringing Screen (Waiting for Hotel Owner to receive) */
+            <div className="flex flex-col items-center justify-center p-6 text-center z-10 space-y-5 max-w-md w-full">
+              
+              {/* Hotel Owner Avatar with Ringing Ripple Effect */}
+              <div className="relative">
+                <div className="w-32 h-32 rounded-3xl bg-gradient-to-tr from-amber-500 via-orange-600 to-amber-700 p-1 shadow-2xl shadow-orange-500/30 border-2 border-amber-300 flex items-center justify-center">
+                  <div className="w-full h-full rounded-2xl bg-stone-900 flex flex-col items-center justify-center p-2">
+                    <Store className="w-12 h-12 text-amber-400 mb-1" />
+                    <span className="text-[11px] text-amber-200 font-bold text-center leading-tight">
+                      {HOTEL_INFO.nameBn}
+                    </span>
+                  </div>
+                </div>
+                {/* Outgoing animated ringing pulse */}
+                <div className="absolute -inset-4 rounded-3xl border-2 border-amber-400/50 animate-ping pointer-events-none" />
+                <div className="absolute -inset-8 rounded-3xl border border-amber-400/25 animate-pulse pointer-events-none" />
+              </div>
+
+              {/* Calling Info */}
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/40">
+                  <Phone className="w-3.5 h-3.5 animate-bounce" />
+                  <span>{lang === 'bn' ? 'মালিকের ফোনে রিং বাজছে...' : 'Ringing hotel desk...'}</span>
+                </div>
+                <h3 className="text-2xl font-bold font-serif text-white">
+                  {HOTEL_INFO.proprietorBn}
+                </h3>
+                <p className="text-sm font-bold text-amber-400">
+                  {currentUserRole === 'admin' ? 'কাস্টমারকে কল করা হচ্ছে' : 'হোটেল মালিক ও প্রধান এডমিন'}
+                </p>
+                <div className="flex flex-col items-center gap-1 text-xs text-amber-300 font-mono font-semibold">
+                  <span>📞 {currentUserRole === 'admin' ? targetCustomerPhone : HOTEL_INFO.phone2}</span>
+                  <span className="text-[11px] text-stone-300 bg-stone-850 px-2.5 py-0.5 rounded-full border border-stone-700">
+                    ✉️ {lang === 'bn' ? 'এডমিন জিমেইল:' : 'Admin Gmail:'} <strong className="text-amber-300">{currentAdminEmail}</strong>
+                  </span>
+                  {callerEmail && (
+                    <span className="text-[11px] text-stone-400">
+                      👤 {lang === 'bn' ? 'আপনার অ্যাকাউন্ট:' : 'Your Account:'} {callerEmail}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-stone-300 mt-2">
+                  {callType === 'video' 
+                    ? (lang === 'bn' ? 'ভিডিও কল রিসিভ করলে দুই প্রান্তের ক্যামেরা সরাসরি চালু হবে।' : 'Camera activates once answered.') 
+                    : (lang === 'bn' ? 'অডিও কল রিসিভ করলে সরাসরি কথা বলতে পারবেন।' : 'Audio starts once answered.')}
+                </p>
+              </div>
+
+              {/* Action Buttons: Owner Answer & Direct SIM Call */}
+              <div className="pt-2 flex flex-col gap-2.5 w-full max-w-sm">
+                <button
+                  type="button"
+                  onClick={handleManualAcceptAsOwner}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-stone-950 font-black text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 border border-emerald-300 animate-pulse"
+                >
+                  <Phone className="w-4 h-4 text-stone-950" />
+                  <span className="text-white drop-shadow-xs font-bold">
+                    {lang === 'bn' ? '✓ মালিক হিসেবে কল রিসিভ করুন (কথা বলুন)' : '✓ Answer Call as Hotel Owner'}
+                  </span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`tel:${HOTEL_INFO.phone2}`}
+                    className="py-2.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-stone-700 transition-colors"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{lang === 'bn' ? 'মোবাইলে সরাসরি ডায়াল' : 'Cellular Dial'}</span>
+                  </a>
+
+                  <a
+                    href={`https://wa.me/8801761869921`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-2.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-stone-700 transition-colors"
+                  >
+                    <span>💬 WhatsApp কল</span>
+                  </a>
+                </div>
+
+                <p className="text-[10px] text-stone-400">
+                  {lang === 'bn' 
+                    ? 'হোটেল মালিকের ডিভাইসে একটানা রিংটোন বাজছে। মালিক রিসিভ করলেই সরাসরি কথা শুরু হবে।'
+                    : 'Ringtone is ringing on the hotel owner device until answered.'}
+                </p>
+              </div>
+            </div>
+          ) : callType === 'video' ? (
+            /* Connected Video Call View */
             <div className="relative w-full h-full">
-              {/* Main Remote Video Feed (The Other Party) */}
+              {/* Main Remote Video Feed (Hotel Owner / Counter) */}
               <div className="absolute inset-0 bg-stone-950">
                 <img
                   src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80"
@@ -269,17 +427,17 @@ export const CallModal: React.FC<CallModalProps> = ({
                 <div className="absolute bottom-24 left-4 right-4 sm:right-auto bg-stone-900/90 backdrop-blur-md p-3.5 rounded-2xl border border-stone-700 max-w-sm shadow-xl">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-stone-950 font-black flex items-center justify-center text-sm shadow-md">
-                      {isAdminCalling ? <Users className="w-5 h-5 text-stone-950" /> : <Store className="w-5 h-5 text-stone-950" />}
+                      {isAdmin ? <Users className="w-5 h-5 text-stone-950" /> : <Store className="w-5 h-5 text-stone-950" />}
                     </div>
                     <div>
                       <p className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
-                        <span>{isAdminCalling ? targetCustomerName : `${HOTEL_INFO.nameBn} - মেইন ডেস্ক`}</span>
-                        {!isAdminCalling && <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
+                        <span>{isAdmin ? targetCustomerName : `${HOTEL_INFO.nameBn} - হোটেল ডেস্ক`}</span>
+                        {!isAdmin && <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
                       </p>
                       <p className="text-[11px] text-stone-300">
-                        {isAdminCalling 
-                          ? `কাস্টমার ফোন: ${targetCustomerPhone}` 
-                          : `মালিক: ${HOTEL_INFO.proprietorBn} (এডমিন: ${currentAdminEmail})`
+                        {isAdmin 
+                          ? `গ্রাহক মোবাইল: ${targetCustomerPhone}` 
+                          : `মালিক: ${HOTEL_INFO.proprietorBn} (${currentAdminEmail})`
                         }
                       </p>
                     </div>
@@ -289,7 +447,7 @@ export const CallModal: React.FC<CallModalProps> = ({
                   <div className="mt-2.5 pt-2 border-t border-stone-800 flex items-center justify-between text-[11px]">
                     <div className="flex items-center gap-1 text-emerald-400 font-medium">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>{lang === 'bn' ? 'P2P অডিও সক্রিয় • কথা বলছেন' : 'P2P Audio Active'}</span>
+                      <span>{lang === 'bn' ? 'অডিও ও ভিডিও সক্রিয় • কথা বলছেন' : 'HD Call Active • Speaking'}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       {audioLevels.map((lvl, idx) => (
@@ -323,11 +481,12 @@ export const CallModal: React.FC<CallModalProps> = ({
 
                 {/* Local Camera Tag */}
                 <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black/70 backdrop-blur-xs text-[10px] text-center text-amber-200 rounded-md py-0.5 font-medium flex items-center justify-center gap-1">
-                  <span>{isAdminCalling ? (lang === 'bn' ? 'আপনার ক্যামেরা (এডমিন)' : 'Admin Camera') : (lang === 'bn' ? 'আপনার ক্যামেরা' : 'You (Customer)')}</span>
+                  <span>{isAdmin ? (lang === 'bn' ? 'আপনার ক্যামেরা (মালিক)' : 'Owner Camera') : (lang === 'bn' ? 'আপনার ক্যামেরা' : 'Your Camera')}</span>
                 </div>
 
                 {/* Camera Flip Button */}
                 <button
+                  type="button"
                   onClick={flipCamera}
                   className="absolute top-2 right-2 p-1.5 rounded-full bg-black/70 text-white hover:bg-black transition-colors cursor-pointer"
                   title="ক্যামেরা ফ্লিপ করুন"
@@ -337,14 +496,14 @@ export const CallModal: React.FC<CallModalProps> = ({
               </div>
             </div>
           ) : (
-            /* WebRTC Audio Call Atmosphere Screen */
+            /* Connected Audio Call Screen */
             <div className="flex flex-col items-center justify-center p-6 text-center z-10 space-y-4 max-w-md w-full">
               
               {/* Hotel / Caller Avatar Badge */}
               <div className="relative">
                 <div className="w-32 h-32 rounded-3xl bg-gradient-to-tr from-amber-500 via-orange-600 to-amber-700 p-1 shadow-2xl shadow-orange-500/30 border-2 border-amber-300 flex items-center justify-center">
-                  <div className="w-full h-full rounded-2xl bg-stone-900 flex flex-col items-center justify-center">
-                    {isAdminCalling ? (
+                  <div className="w-full h-full rounded-2xl bg-stone-900 flex flex-col items-center justify-center p-2">
+                    {isAdmin ? (
                       <>
                         <Users className="w-12 h-12 text-amber-400 mb-1" />
                         <span className="text-xs text-amber-200 font-bold">{targetCustomerName}</span>
@@ -352,29 +511,29 @@ export const CallModal: React.FC<CallModalProps> = ({
                     ) : (
                       <>
                         <Store className="w-12 h-12 text-amber-400 mb-1" />
-                        <span className="text-xs text-amber-200 font-bold">হোটেল আল শেখ ফরিদ</span>
+                        <span className="text-xs text-amber-200 font-bold">{HOTEL_INFO.nameBn}</span>
                       </>
                     )}
                   </div>
                 </div>
                 {/* Animated Pulsing Sound Waves */}
-                <div className="absolute -inset-4 rounded-3xl border-2 border-amber-400/40 animate-ping pointer-events-none" />
+                <div className="absolute -inset-4 rounded-3xl border-2 border-emerald-400/40 animate-ping pointer-events-none" />
                 <div className="absolute -inset-8 rounded-3xl border border-amber-400/20 animate-pulse pointer-events-none" />
               </div>
 
               {/* Call Details */}
               <div>
-                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold border border-amber-500/40 mb-1.5">
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/40 mb-1.5">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>{lang === 'bn' ? 'ওয়েব আরটিসি (WebRTC) অডিও লিংক' : 'WebRTC Encrypted Audio'}</span>
+                  <span>{lang === 'bn' ? 'এইচডি অডিও কল কানেক্টেড' : 'HD Audio Call Connected'}</span>
                 </div>
                 <h3 className="text-xl font-bold font-serif text-amber-100">
-                  {isAdminCalling ? targetCustomerName : HOTEL_INFO.nameBn}
+                  {isAdmin ? targetCustomerName : HOTEL_INFO.nameBn}
                 </h3>
                 <p className="text-sm text-stone-300 font-medium mt-0.5">
-                  {isAdminCalling 
+                  {isAdmin 
                     ? `গ্রাহক মোবাইল: ${targetCustomerPhone}`
-                    : `মালিক: ${HOTEL_INFO.proprietorBn} (এডমিন: ${currentAdminEmail})`
+                    : `মালিক: ${HOTEL_INFO.proprietorBn} (মোবাইল: ${HOTEL_INFO.phone2} | হেল্পলাইন: ${HOTEL_INFO.phone1})`
                   }
                 </p>
                 <p className="text-xs text-stone-400 mt-1">
@@ -390,21 +549,21 @@ export const CallModal: React.FC<CallModalProps> = ({
                     return (
                       <span
                         key={idx}
-                        className="w-1.5 bg-gradient-to-t from-amber-600 to-amber-300 rounded-full transition-all duration-100"
+                        className="w-1.5 bg-gradient-to-t from-emerald-500 to-amber-300 rounded-full transition-all duration-100"
                         style={{ height: `${dynamicH}%` }}
                       />
                     );
                   })}
                 </div>
                 <p className="text-[10px] text-emerald-400 font-medium mt-1">
-                  ✓ {lang === 'bn' ? 'হাই-ডেফিনিশন অপাস (Opus 48kHz) অডিও কানেক্টেড' : 'High-Definition Opus 48kHz Audio Connected'}
+                  ✓ {lang === 'bn' ? 'উভয় পক্ষের অপাস (Opus 48kHz) ক্রিস্টাল ক্লিয়ার অডিও চলছে' : 'Both sides Opus 48kHz crystal clear audio active'}
                 </p>
               </div>
 
-              {/* Quick Prompt */}
+              {/* Prompt */}
               <p className="text-xs text-stone-400 italic max-w-sm">
-                {isAdminCalling 
-                  ? `"হ্যালো, হোটেল আল শেখ ফরিদ এডমিন ড্যাশবোর্ড থেকে বলছি। আপনার অর্ডার নিয়ে কথা বলছি..."`
+                {isAdmin 
+                  ? `"হ্যালো, হোটেল আল শেখ ফরিদ থেকে আমি আব্দুল বারিক শেখ বলছি। কীভাবে সহযোগিতা করতে পারি?"`
                   : `"আসসালামু আলাইকুম, হোটেল আল শেখ ফরিদ থেকে বলছি। যেকোনো খাবার পার্সেল বা ডাইন-ইন এর জন্য সরাসরি বলুন..."`
                 }
               </p>
@@ -415,65 +574,81 @@ export const CallModal: React.FC<CallModalProps> = ({
         {/* Bottom WebRTC Control Bar */}
         <div className="p-4 sm:p-5 bg-stone-950 border-t border-stone-800 flex items-center justify-around gap-2 z-30">
           
-          {/* Mute Mic Button */}
-          <button
-            type="button"
-            onClick={toggleMic}
-            className={`p-3.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
-              isMuted
-                ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
-            }`}
-          >
-            {isMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-amber-300" />}
-            <span className="text-[10px] font-bold">
-              {isMuted ? (lang === 'bn' ? 'আনমিউট' : 'Unmute') : (lang === 'bn' ? 'মাইক অন' : 'Mute')}
-            </span>
-          </button>
+          {callPhase === 'connected' ? (
+            <>
+              {/* Mute Mic Button */}
+              <button
+                type="button"
+                onClick={toggleMic}
+                className={`p-3.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  isMuted
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                    : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
+                }`}
+              >
+                {isMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-amber-300" />}
+                <span className="text-[10px] font-bold">
+                  {isMuted ? (lang === 'bn' ? 'আনমিউট' : 'Unmute') : (lang === 'bn' ? 'মাইক অন' : 'Mute')}
+                </span>
+              </button>
 
-          {/* Video Toggle Button */}
-          {callType === 'video' && (
-            <button
-              type="button"
-              onClick={toggleVideo}
-              className={`p-3.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                isVideoOff
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                  : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
-              }`}
-            >
-              {isVideoOff ? <VideoOff className="w-5 h-5 text-red-400" /> : <Video className="w-5 h-5 text-amber-300" />}
-              <span className="text-[10px] font-bold">
-                {isVideoOff ? (lang === 'bn' ? 'ক্যামেরা অন' : 'Start Cam') : (lang === 'bn' ? 'ক্যামেরা অফ' : 'Stop Cam')}
-              </span>
-            </button>
+              {/* Video Toggle Button */}
+              {callType === 'video' && (
+                <button
+                  type="button"
+                  onClick={toggleVideo}
+                  className={`p-3.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    isVideoOff
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                      : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
+                  }`}
+                >
+                  {isVideoOff ? <VideoOff className="w-5 h-5 text-red-400" /> : <Video className="w-5 h-5 text-amber-300" />}
+                  <span className="text-[10px] font-bold">
+                    {isVideoOff ? (lang === 'bn' ? 'ক্যামেরা অন' : 'Start Cam') : (lang === 'bn' ? 'ক্যামেরা অফ' : 'Stop Cam')}
+                  </span>
+                </button>
+              )}
+
+              {/* Speaker / Volume Button */}
+              <button
+                type="button"
+                onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
+                className={`p-3.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  isSpeakerMuted
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                    : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
+                }`}
+              >
+                {isSpeakerMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                <span className="text-[10px] font-bold">
+                  {isSpeakerMuted ? (lang === 'bn' ? 'স্পিকার বন্ধ' : 'Muted') : (lang === 'bn' ? 'স্পিকার' : 'Speaker')}
+                </span>
+              </button>
+
+              {/* End Call Button */}
+              <button
+                type="button"
+                onClick={handleEndCall}
+                className="p-3.5 px-6 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex flex-col items-center gap-1 shadow-lg shadow-red-600/40 transition-transform active:scale-95 cursor-pointer font-bold"
+              >
+                <PhoneOff className="w-5 h-5" />
+                <span className="text-[10px]">{lang === 'bn' ? 'কল শেষ করুন' : 'End Call'}</span>
+              </button>
+            </>
+          ) : (
+            /* Cancel / Hangup while ringing */
+            <div className="w-full flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleEndCall}
+                className="py-3 px-8 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-lg shadow-red-600/40 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>{lang === 'bn' ? 'কল বাতিল করুন' : 'Cancel Call'}</span>
+              </button>
+            </div>
           )}
-
-          {/* Speaker / Volume Button */}
-          <button
-            type="button"
-            onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
-            className={`p-3.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
-              isSpeakerMuted
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
-            }`}
-          >
-            {isSpeakerMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            <span className="text-[10px] font-bold">
-              {isSpeakerMuted ? (lang === 'bn' ? 'স্পিকার বন্ধ' : 'Muted') : (lang === 'bn' ? 'স্পিকার' : 'Speaker')}
-            </span>
-          </button>
-
-          {/* End Call Button */}
-          <button
-            type="button"
-            onClick={handleEndCall}
-            className="p-3.5 px-6 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex flex-col items-center gap-1 shadow-lg shadow-red-600/40 transition-transform active:scale-95 cursor-pointer font-bold"
-          >
-            <PhoneOff className="w-5 h-5" />
-            <span className="text-[10px]">{lang === 'bn' ? 'কল শেষ করুন' : 'End Call'}</span>
-          </button>
         </div>
       </div>
     </div>

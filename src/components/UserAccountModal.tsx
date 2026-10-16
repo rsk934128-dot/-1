@@ -87,11 +87,15 @@ interface UserAccountModalProps {
   onAddToCart?: (item: CartItem) => void;
   onOpenCart?: () => void;
   onEmailInvoice?: (order: Order) => void;
+  onOpenRateMeal?: (order: Order) => void;
   lang: 'bn' | 'en';
   onSignInWithGoogle: () => Promise<void>;
   onSignOut: () => Promise<void>;
   isGoogleSignedIn: boolean;
   authLoading?: boolean;
+  isAdmin?: boolean;
+  onOpenAdminDashboard?: () => void;
+  onOpenAdminLogin?: () => void;
 }
 
 interface FavoriteItemSummary {
@@ -130,11 +134,15 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
   onAddToCart,
   onOpenCart,
   onEmailInvoice,
+  onOpenRateMeal,
   lang,
   onSignInWithGoogle,
   onSignOut,
   isGoogleSignedIn,
   authLoading = false,
+  isAdmin = false,
+  onOpenAdminDashboard,
+  onOpenAdminLogin,
 }) => {
   const [activeTab, setActiveTab] = useState<'favorites' | 'loyalty' | 'orders' | 'trends' | 'reservations' | 'profile'>('favorites');
   const [trendMetric, setTrendMetric] = useState<'both' | 'spending' | 'orders'>('both');
@@ -349,8 +357,15 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
           );
           return;
         }
+        if (
+          authErr.code === 'auth/unauthorized-domain' ||
+          Boolean(authErr.message && authErr.message.includes('unauthorized-domain'))
+        ) {
+          // Handled via fallback session - do not display an error banner
+          return;
+        }
       }
-      console.error('Google Sign-In Error:', err);
+      console.warn('Google Sign-In Notice:', err);
       setAuthError(
         lang === 'bn' 
           ? 'গুগল সাইন-ইনে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' 
@@ -502,8 +517,19 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
               </div>
             )}
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-bold font-serif">{user.name}</h3>
+                {isAdmin ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-stone-950 border border-amber-300 shadow-xs">
+                    <Crown className="w-3 h-3 text-stone-950" />
+                    {lang === 'bn' ? 'মালিক / অ্যাডমিন' : 'Admin / Owner'}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/15 text-amber-200 border border-white/20">
+                    <User className="w-3 h-3 text-amber-300" />
+                    {lang === 'bn' ? 'কাস্টমার একাউন্ট' : 'Customer Account'}
+                  </span>
+                )}
                 {isGoogleSignedIn && (
                   <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                     <CheckCircle2 className="w-3 h-3" />
@@ -511,7 +537,34 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-amber-200/90">{user.phone} • {user.email || 'ইমেইল যুক্ত করুন'}</p>
+              <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                <p className="text-xs text-amber-200/90">{user.phone} • {user.email || 'ইমেইল যুক্ত করুন'}</p>
+                {isAdmin && onOpenAdminDashboard && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenAdminDashboard();
+                    }}
+                    className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                  >
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>{lang === 'bn' ? 'অ্যাডমিন ড্যাশবোর্ড খুলুন' : 'Open Admin Panel'}</span>
+                  </button>
+                )}
+                {!isAdmin && onOpenAdminLogin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenAdminLogin();
+                    }}
+                    className="text-[11px] text-amber-300 hover:text-white underline cursor-pointer transition-colors"
+                  >
+                    {lang === 'bn' ? 'হোটেল মালিক বা অ্যাডমিন লগইন?' : 'Owner / Admin Login?'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -1288,7 +1341,134 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                       ))}
                     </div>
 
+                    {/* Rate My Meal Saved Rating Card or Rating Callout */}
+                    {ord.mealRating ? (
+                      <div className="p-3 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-xl border border-amber-500/30 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center text-amber-500">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`w-3.5 h-3.5 ${
+                                    s <= ord.mealRating!.overallRating
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'text-stone-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs font-black text-amber-900">
+                              {ord.mealRating.overallRating}/5
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900">
+                              {lang === 'bn' ? 'রেটিং সংরক্ষিত ✓' : 'Rated ✓'}
+                            </span>
+                          </div>
+
+                          {onOpenRateMeal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRateMeal(ord)}
+                              className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>{lang === 'bn' ? 'রেটিং পরিবর্তন' : 'Edit Rating'}</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Quick Tags */}
+                        {ord.mealRating.quickTags && ord.mealRating.quickTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {ord.mealRating.quickTags.map((tag, tIdx) => (
+                              <span
+                                key={tIdx}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-white border border-amber-200 text-stone-700 font-medium"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Item-specific feedback notes */}
+                        {ord.mealRating.itemFeedbacks && ord.mealRating.itemFeedbacks.length > 0 && (
+                          <div className="space-y-1 pt-1 border-t border-amber-200/60 text-[11px] text-stone-700">
+                            {ord.mealRating.itemFeedbacks.map((itemFb, ifbIdx) => (
+                              <div key={ifbIdx} className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-stone-800 truncate">
+                                  {lang === 'bn' ? itemFb.foodNameBn : itemFb.foodNameEn || itemFb.foodNameBn}:
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <div className="flex text-amber-400">
+                                    {[1, 2, 3, 4, 5].map((st) => (
+                                      <Star
+                                        key={st}
+                                        className={`w-2.5 h-2.5 ${st <= itemFb.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}`}
+                                      />
+                                    ))}
+                                  </div>
+                                  {itemFb.tags && itemFb.tags.length > 0 && (
+                                    <span className="text-[9px] text-stone-500 italic">
+                                      ({itemFb.tags[0]})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Overall Comment */}
+                        {ord.mealRating.overallComment && (
+                          <p className="text-[11px] text-stone-700 italic bg-white/80 p-2 rounded-lg border border-amber-200/50">
+                            "{ord.mealRating.overallComment}"
+                          </p>
+                        )}
+                      </div>
+                    ) : onOpenRateMeal ? (
+                      <div className="p-2.5 bg-amber-50/70 rounded-xl border border-dashed border-amber-300 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0 animate-pulse" />
+                          <div>
+                            <p className="text-xs font-bold text-amber-950">
+                              {lang === 'bn' ? 'খাবারের মান কেমন লেগেছে?' : 'How was your meal?'}
+                            </p>
+                            <p className="text-[10px] text-amber-800">
+                              {lang === 'bn' ? 'রেটিং ও ফিডব্যাক দিলে পাবেন +১৫ রিওয়ার্ড পয়েন্ট!' : 'Rate and get +15 bonus reward points!'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => onOpenRateMeal(ord)}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-transform active:scale-95 shrink-0"
+                        >
+                          <Star className="w-3 h-3 fill-stone-950" />
+                          <span>{lang === 'bn' ? 'রেট করুন' : 'Rate Meal'}</span>
+                        </button>
+                      </div>
+                    ) : null}
+
                     <div className="flex flex-wrap justify-end items-center gap-2 pt-1">
+                      {/* Rate My Meal Action Button */}
+                      {onOpenRateMeal && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenRateMeal(ord)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border shadow-2xs ${
+                            ord.mealRating
+                              ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                              : 'bg-amber-500 hover:bg-amber-600 text-stone-950 font-black border-amber-500'
+                          }`}
+                          title={lang === 'bn' ? 'খাবারের স্টার রেটিং ও ফিডব্যাক দিন' : 'Rate My Meal'}
+                        >
+                          <Star className={`w-3.5 h-3.5 ${ord.mealRating ? 'fill-amber-600 text-amber-600' : 'fill-stone-950 text-stone-950'}`} />
+                          <span>{ord.mealRating ? (lang === 'bn' ? 'রেটিং পরিবর্তন' : 'Edit Rating') : (lang === 'bn' ? 'রেট মাই মিল' : 'Rate Meal')}</span>
+                        </button>
+                      )}
                       {/* Re-order Primary Action Button */}
                       <button
                         type="button"
@@ -1837,7 +2017,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                               type="button"
                               onClick={() => {
                                 const msg = `*হোটেল আল শেখ ফরিদ - টেবিল বুকিং নিশ্চিতকরণ*\nরিজার্ভেশন আইডি: ${res.id}\nগ্রাহক: ${res.customerName}\nতারিখ: ${res.date}\nসময়: ${res.timeSlot}\nটেবিল: ${tableTypeLabel}\nঅতিথি: ${res.guestCount} জন`;
-                                window.open(`https://wa.me/8801775339836?text=${encodeURIComponent(msg)}`, '_blank');
+                                window.open(`https://wa.me/8801761869921?text=${encodeURIComponent(msg)}`, '_blank');
                               }}
                               className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
                             >

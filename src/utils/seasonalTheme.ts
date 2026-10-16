@@ -1,4 +1,5 @@
 import React from 'react';
+import { safeStorage } from './safeStorage';
 
 export type SeasonalThemeId = 'classic' | 'eid' | 'baishakh' | 'monsoon' | 'winter' | 'puja';
 
@@ -245,23 +246,15 @@ export const SEASONAL_THEMES: Record<SeasonalThemeId, SeasonalTheme> = {
 export const STORAGE_KEY_SEASONAL_THEME = 'hotel_sheikh_farid_seasonal_theme';
 
 export function getSavedSeasonalTheme(): SeasonalThemeId {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY_SEASONAL_THEME) as SeasonalThemeId | null;
-    if (saved && SEASONAL_THEMES[saved]) {
-      return saved;
-    }
-  } catch (e) {
-    // Ignore error
+  const saved = safeStorage.getItem(STORAGE_KEY_SEASONAL_THEME) as SeasonalThemeId | null;
+  if (saved && SEASONAL_THEMES[saved]) {
+    return saved;
   }
   return 'classic';
 }
 
 export function saveSeasonalTheme(themeId: SeasonalThemeId): void {
-  try {
-    localStorage.setItem(STORAGE_KEY_SEASONAL_THEME, themeId);
-  } catch (e) {
-    // Ignore error
-  }
+  safeStorage.setItem(STORAGE_KEY_SEASONAL_THEME, themeId);
 }
 
 /**

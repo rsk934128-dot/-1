@@ -36,9 +36,9 @@ export const PrintableOrderReceipt: React.FC<PrintableOrderReceiptProps> = ({
       <div className="text-center pb-2 border-b border-dashed border-black mb-2">
         <h2 className="text-sm font-black tracking-wide uppercase">{HOTEL_INFO.nameBn}</h2>
         <p className="text-[10px]">{HOTEL_INFO.nameEn}</p>
-        <p className="text-[9px]">প্রোপাইটার: {HOTEL_INFO.proprietorBn}</p>
+        <p className="text-[9px]">প্রোপাইটার: {HOTEL_INFO.proprietorBn} ({HOTEL_INFO.phone2})</p>
         <p className="text-[9px]">{HOTEL_INFO.locationBn}</p>
-        <p className="text-[9px]">মোবাইল: {HOTEL_INFO.phone1}, {HOTEL_INFO.phone2}</p>
+        <p className="text-[9px]">হেল্পলাইন ও WhatsApp: {HOTEL_INFO.phone1}</p>
         <div className="inline-block border border-black px-2 py-0.5 mt-1 font-bold text-[10px]">
           গ্রাহক রসিদ ও কিচেন টোকেন
         </div>

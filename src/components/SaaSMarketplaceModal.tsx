@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { safeStorage } from '../utils/safeStorage';
 import { 
   CheckCircle2, 
   X, 
@@ -159,13 +160,9 @@ export const SaaSMarketplaceModal: React.FC<SaaSMarketplaceModalProps> = ({
     setSubmittedOrder(orderRequest);
     setIsSubmitted(true);
 
-    // Save to local storage for persistence
-    try {
-      const existingReqs = JSON.parse(localStorage.getItem('hotel_saas_lead_orders') || '[]');
-      localStorage.setItem('hotel_saas_lead_orders', JSON.stringify([orderRequest, ...existingReqs]));
-    } catch (err) {
-      console.error('Failed to save saas order to localStorage', err);
-    }
+    // Save to safeStorage for persistence
+    const existingReqs = safeStorage.getJSON<any[]>('hotel_saas_lead_orders') || [];
+    safeStorage.setJSON('hotel_saas_lead_orders', [orderRequest, ...existingReqs]);
   };
 
   const handleSendToWhatsApp = () => {

@@ -5,32 +5,42 @@
  * Plays authentic acoustic kitchen service bells, bKash verification chimes, and delivery alerts.
  */
 
+import { safeStorage } from '../utils/safeStorage';
+
 const STORAGE_KEY_VOLUME = 'al_sheikh_sound_volume';
 const STORAGE_KEY_MUTED = 'al_sheikh_sound_muted';
+
+export interface SoundServiceState {
+  volume: number;
+  muted: boolean;
+  isRinging?: boolean;
+  ringingOrderIds?: string[];
+}
 
 class SoundNotificationServiceClass {
   private ctx: AudioContext | null = null;
   private volume: number = 0.85; // 0.0 to 1.0
   private muted: boolean = false;
-  private listeners: Set<(state: { volume: number; muted: boolean }) => void> = new Set();
+  private listeners: Set<(state: SoundServiceState) => void> = new Set();
+
+  // Repeating order ringtone state
+  private ringtoneInterval: ReturnType<typeof setInterval> | null = null;
+  private isRinging: boolean = false;
+  private ringingOrderIds: Set<string> = new Set();
 
   constructor() {
     if (typeof window !== 'undefined') {
-      try {
-        const savedVol = localStorage.getItem(STORAGE_KEY_VOLUME);
-        if (savedVol !== null) {
-          const parsed = parseFloat(savedVol);
-          if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
-            this.volume = parsed;
-          }
+      const savedVol = safeStorage.getItem(STORAGE_KEY_VOLUME);
+      if (savedVol !== null) {
+        const parsed = parseFloat(savedVol);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+          this.volume = parsed;
         }
+      }
 
-        const savedMuted = localStorage.getItem(STORAGE_KEY_MUTED);
-        if (savedMuted !== null) {
-          this.muted = savedMuted === 'true';
-        }
-      } catch {
-        // localStorage may be unavailable
+      const savedMuted = safeStorage.getItem(STORAGE_KEY_MUTED);
+      if (savedMuted !== null) {
+        this.muted = savedMuted === 'true';
       }
 
       // Auto-unlock audio on first user gesture
@@ -332,9 +342,156 @@ class SoundNotificationServiceClass {
   }
 
   /**
+   * Synthesizes an authentic high-impact restaurant POS order ringtone cycle ("Ding-Dong-Chime!").
+   * Repeats continuously until the hotel owner confirms the order.
+   */
+  public playRingtoneCycle(): void {
+    if (this.muted) return;
+    const ctx = this.getOrCreateContext();
+    if (!ctx) return;
+
+    try {
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+      const master = this.createMasterGain(ctx, 0.95);
+
+      // 4-Note Melodic Restaurant Order Call Arpeggio (E6, G#6, B6, E7)
+      // Followed by double high-bell accent
+      const notes = [
+        { freq: 1318.51, delay: 0.00, dur: 0.40, type: 'triangle' as OscillatorType }, // E6
+        { freq: 1661.22, delay: 0.16, dur: 0.40, type: 'triangle' as OscillatorType }, // G#6
+        { freq: 1975.53, delay: 0.32, dur: 0.45, type: 'triangle' as OscillatorType }, // B6
+        { freq: 2637.02, delay: 0.48, dur: 0.85, type: 'sine' as OscillatorType },     // E7 (Bright long ring)
+        // High attention bell pair
+        { freq: 2093.00, delay: 0.95, dur: 0.45, type: 'sine' as OscillatorType },     // C7
+        { freq: 2637.02, delay: 1.15, dur: 0.70, type: 'sine' as OscillatorType },     // E7
+      ];
+
+      notes.forEach(({ freq, delay, dur, type }) => {
+        const noteTime = now + delay;
+
+        // Primary bell tone
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, noteTime);
+
+        gain.gain.setValueAtTime(0, noteTime);
+        gain.gain.linearRampToValueAtTime(0.35, noteTime + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0003, noteTime + dur);
+
+        osc.connect(gain);
+        gain.connect(master);
+
+        osc.start(noteTime);
+        osc.stop(noteTime + dur + 0.05);
+
+        // Acoustic shimmer harmonic (1.5x / fifth)
+        const harmOsc = ctx.createOscillator();
+        const harmGain = ctx.createGain();
+        harmOsc.type = 'sine';
+        harmOsc.frequency.setValueAtTime(freq * 1.5, noteTime);
+
+        harmGain.gain.setValueAtTime(0, noteTime);
+        harmGain.gain.linearRampToValueAtTime(0.15, noteTime + 0.005);
+        harmGain.gain.exponentialRampToValueAtTime(0.0001, noteTime + (dur * 0.7));
+
+        harmOsc.connect(harmGain);
+        harmGain.connect(master);
+
+        harmOsc.start(noteTime);
+        harmOsc.stop(noteTime + (dur * 0.7) + 0.02);
+      });
+    } catch {
+      // Graceful fallback
+    }
+  }
+
+  /**
+   * Starts looping the incoming order ringtone until the hotel owner confirms the order.
+   * Tracks orderId so multiple unconfirmed orders keep the ringtone active until all are confirmed.
+   */
+  public startOrderRingtone(orderId?: string): void {
+    if (orderId) {
+      this.ringingOrderIds.add(orderId);
+    }
+
+    // Auto unmute if muted or volume is low so owner doesn't miss incoming orders
+    if (this.muted) {
+      this.setMuted(false);
+    }
+    if (this.volume < 0.3) {
+      this.setVolume(0.85);
+    }
+
+    if (!this.isRinging) {
+      this.isRinging = true;
+      // Play immediately
+      this.playRingtoneCycle();
+
+      // Loop every 1900ms
+      if (this.ringtoneInterval) {
+        clearInterval(this.ringtoneInterval);
+      }
+      this.ringtoneInterval = setInterval(() => {
+        if (this.isRinging) {
+          this.playRingtoneCycle();
+        }
+      }, 1900);
+    }
+
+    this.notifyListeners();
+  }
+
+  /**
+   * Stops the order ringtone when the hotel owner confirms the order.
+   * If an orderId is provided, removes it; if no more orders are pending confirmation, silences the ringtone.
+   */
+  public stopOrderRingtone(orderId?: string): void {
+    if (orderId) {
+      this.ringingOrderIds.delete(orderId);
+    } else {
+      this.ringingOrderIds.clear();
+    }
+
+    if (!orderId || this.ringingOrderIds.size === 0) {
+      this.ringingOrderIds.clear();
+      this.isRinging = false;
+      if (this.ringtoneInterval) {
+        clearInterval(this.ringtoneInterval);
+        this.ringtoneInterval = null;
+      }
+    }
+
+    this.notifyListeners();
+  }
+
+  /**
+   * Temporarily silences the ringtone audio without clearing unconfirmed status.
+   */
+  public silenceRingtone(): void {
+    this.isRinging = false;
+    if (this.ringtoneInterval) {
+      clearInterval(this.ringtoneInterval);
+      this.ringtoneInterval = null;
+    }
+    this.notifyListeners();
+  }
+
+  public isOrderRingtoneActive(): boolean {
+    return this.isRinging;
+  }
+
+  public getRingingOrderIds(): string[] {
+    return Array.from(this.ringingOrderIds);
+  }
+
+  /**
    * Sound test runner for settings / admin verification.
    */
-  public testSound(type: 'new_order' | 'bkash_verified' | 'kitchen_bell' | 'chime' = 'new_order'): void {
+  public testSound(type: 'new_order' | 'bkash_verified' | 'kitchen_bell' | 'chime' | 'order_ringtone' = 'new_order'): void {
     if (this.muted) {
       this.setMuted(false);
     }
@@ -344,6 +501,8 @@ class SoundNotificationServiceClass {
       this.playBkashVerificationSuccess();
     } else if (type === 'kitchen_bell') {
       this.playKitchenBell();
+    } else if (type === 'order_ringtone') {
+      this.playRingtoneCycle();
     } else {
       this.playNotificationChime();
     }
@@ -357,9 +516,7 @@ class SoundNotificationServiceClass {
 
   public setVolume(vol: number): void {
     this.volume = Math.max(0, Math.min(1, vol));
-    try {
-      localStorage.setItem(STORAGE_KEY_VOLUME, this.volume.toString());
-    } catch {}
+    safeStorage.setItem(STORAGE_KEY_VOLUME, this.volume.toString());
     this.notifyListeners();
   }
 
@@ -369,9 +526,7 @@ class SoundNotificationServiceClass {
 
   public setMuted(isMuted: boolean): void {
     this.muted = isMuted;
-    try {
-      localStorage.setItem(STORAGE_KEY_MUTED, this.muted ? 'true' : 'false');
-    } catch {}
+    safeStorage.setItem(STORAGE_KEY_MUTED, this.muted ? 'true' : 'false');
     this.notifyListeners();
   }
 
@@ -380,16 +535,26 @@ class SoundNotificationServiceClass {
     return this.muted;
   }
 
-  public subscribe(callback: (state: { volume: number; muted: boolean }) => void): () => void {
+  public subscribe(callback: (state: SoundServiceState) => void): () => void {
     this.listeners.add(callback);
-    callback({ volume: this.volume, muted: this.muted });
+    callback({
+      volume: this.volume,
+      muted: this.muted,
+      isRinging: this.isRinging,
+      ringingOrderIds: Array.from(this.ringingOrderIds),
+    });
     return () => {
       this.listeners.delete(callback);
     };
   }
 
   private notifyListeners(): void {
-    const state = { volume: this.volume, muted: this.muted };
+    const state: SoundServiceState = {
+      volume: this.volume,
+      muted: this.muted,
+      isRinging: this.isRinging,
+      ringingOrderIds: Array.from(this.ringingOrderIds),
+    };
     this.listeners.forEach((fn) => {
       try {
         fn(state);

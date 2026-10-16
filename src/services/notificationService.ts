@@ -1,6 +1,7 @@
 import { playNotificationChime } from '../utils/notificationSound';
 import { Order } from '../types';
 import { BackgroundSyncService } from './backgroundSyncService';
+import { safeStorage } from '../utils/safeStorage';
 
 export interface PushNotificationPayload {
   id: string;
@@ -25,7 +26,7 @@ export function getPushNotificationStatus(): 'granted' | 'denied' | 'default' | 
     if (Notification.permission === 'denied') return 'denied';
   }
 
-  const savedSimulated = localStorage.getItem(STORAGE_KEY_NOTIFICATION_ENABLED);
+  const savedSimulated = safeStorage.getItem(STORAGE_KEY_NOTIFICATION_ENABLED);
   if (savedSimulated === 'true') {
     return 'simulated_enabled';
   } else if (savedSimulated === 'false') {
@@ -48,8 +49,8 @@ export async function requestPushNotificationPermission(): Promise<boolean> {
     }
   }
 
-  // Always enable simulated push notification state in local storage
-  localStorage.setItem(STORAGE_KEY_NOTIFICATION_ENABLED, 'true');
+  // Always enable simulated push notification state in safe storage
+  safeStorage.setItem(STORAGE_KEY_NOTIFICATION_ENABLED, 'true');
   return nativeGranted || true;
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { safeStorage } from '../utils/safeStorage';
 import { 
   ShieldCheck, 
   Store, 
@@ -13,6 +14,7 @@ import {
   Plus, 
   Check, 
   Phone, 
+  PhoneCall,
   AlertCircle,
   Mail,
   Video,
@@ -23,11 +25,13 @@ import {
   Sparkles,
   UserCheck,
   TrendingUp,
+  TrendingDown,
   BarChart3,
   PieChart as PieChartIcon,
   Calendar,
   Layers,
   ArrowUpRight,
+  ArrowDownRight,
   CreditCard,
   UtensilsCrossed,
   Package,
@@ -49,7 +53,10 @@ import {
   Square,
   CheckCheck,
   Zap,
-  BellRing
+  BellRing,
+  Target,
+  Trophy,
+  Save
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -74,10 +81,40 @@ import { INITIAL_SAAS_TENANTS, SaaSTenant, SAAS_PLANS, SaaSOrderRequest } from '
 import { openDirectCustomWhatsApp } from '../utils/whatsappHelper';
 import { CategoryOrderDistributionD3Chart } from './CategoryOrderDistributionD3Chart';
 import { RevenueTrendsChart } from './RevenueTrendsChart';
+import { WeeklyGrowthTrendChart } from './WeeklyGrowthTrendChart';
+import { DailyRevenueRadialGauge } from './DailyRevenueRadialGauge';
+import { AdminAnalyticsPanel } from './AdminAnalyticsPanel';
 import { printOrderReceipt } from '../utils/printReceiptHelper';
 import { PrintableOrderReceipt } from './PrintableOrderReceipt';
 import { exportWeeklySummaryCsv } from '../utils/csvExporter';
 import { SoundNotificationService } from '../services/soundNotificationService';
+
+// Stable top-level chart tooltip
+const CustomChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-stone-950/95 border border-amber-500/40 p-3 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-1">
+        <p className="font-bold text-amber-200 font-serif border-b border-stone-800 pb-1">
+          {label}
+        </p>
+        {payload.map((entry: any, index: number) => (
+          <div key={`item-${index}`} className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-1.5" style={{ color: entry.color || entry.stroke || entry.fill }}>
+              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color || entry.stroke || entry.fill }} />
+              <span>{entry.name}:</span>
+            </span>
+            <span className="font-mono font-black text-white">
+              {entry.dataKey === 'revenue' || entry.dataKey === 'bkash' || entry.dataKey === 'cash' || entry.name.includes('আয়') || entry.name.includes('Revenue')
+                ? `৳ ${entry.value.toLocaleString()}`
+                : `${entry.value} টি`}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 interface AdminDashboardProps {
   orders: Order[];
@@ -89,6 +126,7 @@ interface AdminDashboardProps {
   onOpenBkashSms?: (order?: Order) => void;
   onStartCallWithCustomer?: (customerName: string, customerPhone: string, type: 'audio' | 'video') => void;
   onOpenChat?: () => void;
+  onTestIncomingCall?: () => void;
   currentAdminEmail?: string;
   onSelectAdminEmail?: (email: string) => void;
   onCloseAdmin: () => void;
@@ -107,6 +145,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenBkashSms,
   onStartCallWithCustomer,
   onOpenChat,
+  onTestIncomingCall,
   currentAdminEmail = 'fs2217732@gmail.com',
   onSelectAdminEmail,
   onCloseAdmin,
@@ -114,8 +153,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onToggleStaffMode,
   lang,
 }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'webrtc' | 'menu' | 'stats' | 'saas'>('orders');
-  const [chartView, setChartView] = useState<'revenue_trends' | 'weekly' | 'category_stock' | 'hourly' | 'payment'>('revenue_trends');
+  const [activeTab, setActiveTab] = useState<'orders' | 'webrtc' | 'menu' | 'analytics' | 'stats' | 'saas'>('orders');
+  const [chartView, setChartView] = useState<'goal_gauge' | 'weekly_growth' | 'revenue_trends' | 'weekly' | 'category_stock' | 'hourly' | 'payment'>('weekly_growth');
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [editPriceVal, setEditPriceVal] = useState<number>(0);
   const [activePrintOrder, setActivePrintOrder] = useState<Order | null>(null);
@@ -123,6 +162,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [soundMuted, setSoundMuted] = useState<boolean>(SoundNotificationService.isMuted());
   const [soundVolume, setSoundVolume] = useState<number>(SoundNotificationService.getVolume());
   const [lastTestedSound, setLastTestedSound] = useState<string | null>(null);
+
+  // Daily Revenue Goal State with safe localStorage persistence
+  const [dailyRevenueGoal, setDailyRevenueGoal] = useState<number>(() => {
+    const saved = safeStorage.getItem('hotel_daily_revenue_goal');
+    if (saved) {
+      const parsed = parseFloat(saved);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 10000; // Default goal: ৳ 10,000
+  });
+
+  const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
+  const [goalInputVal, setGoalInputVal] = useState<string>('10000');
+  const [goalFeedbackMsg, setGoalFeedbackMsg] = useState<string>('');
 
   // Kitchen Staff Mode State (Item Checklists, Urgent Flags, Flash Cooked Confirmation, Order Filter)
   const [checkedKitchenItems, setCheckedKitchenItems] = useState<Record<string, boolean>>({});
@@ -196,23 +249,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // SaaS Tenants & Leads State
   const [saasTenants, setSaasTenants] = useState<SaaSTenant[]>(() => {
-    try {
-      const saved = localStorage.getItem('hotel_saas_tenants_admin');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return INITIAL_SAAS_TENANTS;
+    const saved = safeStorage.getJSON<SaaSTenant[]>('hotel_saas_tenants_admin');
+    return saved && Array.isArray(saved) ? saved : INITIAL_SAAS_TENANTS;
   });
 
   const [leadRequests, setLeadRequests] = useState<SaaSOrderRequest[]>(() => {
-    try {
-      const saved = localStorage.getItem('hotel_saas_lead_orders');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
+    const saved = safeStorage.getJSON<SaaSOrderRequest[]>('hotel_saas_lead_orders');
+    return saved && Array.isArray(saved) ? saved : [];
   });
 
   const [newTenantForm, setNewTenantForm] = useState({
@@ -256,11 +299,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const updated = [newTenant, ...saasTenants];
     setSaasTenants(updated);
-    try {
-      localStorage.setItem('hotel_saas_tenants_admin', JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
+    safeStorage.setJSON('hotel_saas_tenants_admin', updated);
 
     setShowAddTenantModal(false);
     setNewTenantForm({
@@ -286,17 +325,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return t;
     });
     setSaasTenants(updated);
-    try {
-      localStorage.setItem('hotel_saas_tenants_admin', JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
+    safeStorage.setJSON('hotel_saas_tenants_admin', updated);
   };
 
+  const [isRingtoneActive, setIsRingtoneActive] = useState<boolean>(SoundNotificationService.isOrderRingtoneActive());
+
   React.useEffect(() => {
-    const unsub = SoundNotificationService.subscribe(({ volume, muted }) => {
+    const unsub = SoundNotificationService.subscribe(({ volume, muted, isRinging }) => {
       setSoundVolume(volume);
       setSoundMuted(muted);
+      setIsRingtoneActive(!!isRinging);
     });
     return unsub;
   }, []);
@@ -305,6 +343,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     SoundNotificationService.testSound('new_order');
     setLastTestedSound('order');
     setTimeout(() => setLastTestedSound(null), 1200);
+  };
+
+  const handleTestOrderRingtone = () => {
+    if (SoundNotificationService.isOrderRingtoneActive()) {
+      SoundNotificationService.stopOrderRingtone();
+      setIsRingtoneActive(false);
+      setLastTestedSound(null);
+    } else {
+      SoundNotificationService.startOrderRingtone('test-ringtone-admin');
+      setIsRingtoneActive(true);
+      setLastTestedSound('ringtone');
+    }
   };
 
   const handleTestBkashSound = () => {
@@ -333,6 +383,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
   const averageOrderValue = orders.length > 0 ? Math.round(totalRevenue / orders.length) : 0;
 
+  // Daily Revenue Goal calculations & edit handlers
+  const goalProgressPercent = useMemo(() => {
+    if (!dailyRevenueGoal || dailyRevenueGoal <= 0) return 0;
+    return Math.round((totalRevenue / dailyRevenueGoal) * 100);
+  }, [totalRevenue, dailyRevenueGoal]);
+
+  const clampedProgressPercent = Math.min(Math.max(goalProgressPercent, 0), 100);
+  const isGoalAchieved = totalRevenue >= dailyRevenueGoal;
+  const remainingToGoal = Math.max(0, dailyRevenueGoal - totalRevenue);
+  const surplusAmount = Math.max(0, totalRevenue - dailyRevenueGoal);
+
+  const handleStartEditGoal = () => {
+    setGoalInputVal(String(dailyRevenueGoal));
+    setIsEditingGoal(true);
+    setGoalFeedbackMsg('');
+  };
+
+  const handleSaveGoal = (newGoalValue?: number) => {
+    const valToSet = newGoalValue !== undefined ? newGoalValue : parseFloat(goalInputVal);
+    if (isNaN(valToSet) || valToSet <= 0) {
+      setGoalFeedbackMsg(lang === 'bn' ? 'অনুগ্রহ করে সঠিক সংখ্যা দিন (০-এর বেশি)' : 'Please enter a valid amount (> 0)');
+      return;
+    }
+    const sanitizedVal = Math.round(valToSet);
+    setDailyRevenueGoal(sanitizedVal);
+    setGoalInputVal(String(sanitizedVal));
+    setIsEditingGoal(false);
+    setGoalFeedbackMsg(lang === 'bn' ? 'দৈনিক লক্ষ্যমাত্রা সফলভাবে সংরক্ষিত হয়েছে!' : 'Daily revenue goal updated successfully!');
+    safeStorage.setItem('hotel_daily_revenue_goal', String(sanitizedVal));
+    setTimeout(() => setGoalFeedbackMsg(''), 3500);
+  };
+
+  const handleCancelEditGoal = () => {
+    setIsEditingGoal(false);
+    setGoalInputVal(String(dailyRevenueGoal));
+    setGoalFeedbackMsg('');
+  };
+
   // 7-day trend data combining historical baseline with today's live orders
   const weeklyTrendData = useMemo(() => {
     const todayOrdersCount = orders.length;
@@ -356,6 +444,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       },
     ];
   }, [orders, totalRevenue]);
+
+  // Weekly Revenue Comparison & Growth Percentage calculation
+  const {
+    currentWeekTotalRevenue,
+    previousWeekTotalRevenue,
+    weeklyRevenueGrowthPct,
+    weeklyRevenueDifference,
+    isWeeklyGrowthPositive
+  } = useMemo(() => {
+    // Current 7-day revenue total from weeklyTrendData
+    const currentWeekTotal = weeklyTrendData.reduce((sum, item) => sum + item.revenue, 0);
+
+    // Baseline previous week 7-day revenue total (Sat: 1850, Sun: 2100, Mon: 1950, Tue: 2400, Wed: 2200, Thu: 2700, Fri: 2600 = ৳ 15,800)
+    const previousWeekTotal = 15800;
+
+    const diff = currentWeekTotal - previousWeekTotal;
+    const growthPct = previousWeekTotal > 0 ? (diff / previousWeekTotal) * 100 : 0;
+
+    return {
+      currentWeekTotalRevenue: currentWeekTotal,
+      previousWeekTotalRevenue: previousWeekTotal,
+      weeklyRevenueGrowthPct: Math.round(growthPct * 10) / 10,
+      weeklyRevenueDifference: diff,
+      isWeeklyGrowthPositive: diff >= 0
+    };
+  }, [weeklyTrendData]);
 
   const handleExportCsv = () => {
     setIsExportingCsv(true);
@@ -419,33 +533,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSaveEdit = (foodId: string) => {
     onUpdateFoodPrice(foodId, editPriceVal);
     setEditingFoodId(null);
-  };
-
-  // Custom Chart Tooltip
-  const CustomChartTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-stone-950/95 border border-amber-500/40 p-3 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-1">
-          <p className="font-bold text-amber-200 font-serif border-b border-stone-800 pb-1">
-            {label}
-          </p>
-          {payload.map((entry: any, index: number) => (
-            <div key={`item-${index}`} className="flex items-center justify-between gap-4">
-              <span className="flex items-center gap-1.5" style={{ color: entry.color || entry.stroke || entry.fill }}>
-                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color || entry.stroke || entry.fill }} />
-                <span>{entry.name}:</span>
-              </span>
-              <span className="font-mono font-black text-white">
-                {entry.dataKey === 'revenue' || entry.dataKey === 'bkash' || entry.dataKey === 'cash' || entry.name.includes('আয়') || entry.name.includes('Revenue')
-                  ? `৳ ${entry.value.toLocaleString()}`
-                  : `${entry.value} টি`}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
   };
 
   return (
@@ -559,6 +646,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('analytics')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'analytics' ? 'bg-amber-500 text-stone-950 shadow-xs font-black' : 'text-stone-300 hover:text-white'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'অ্যানালিটিক্স (Analytics)' : 'Analytics'}</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('stats')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'stats' ? 'bg-amber-500 text-stone-950 shadow-xs' : 'text-stone-300 hover:text-white'
@@ -633,6 +730,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span>{lang === 'bn' ? 'অর্ডার বেল টেস্ট' : 'Test Order Bell'}</span>
           </button>
 
+          {/* Continuous Incoming Order Ringtone Test Button */}
+          <button
+            type="button"
+            onClick={handleTestOrderRingtone}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs border cursor-pointer transition-all ${
+              isRingtoneActive
+                ? 'bg-red-600 text-white border-red-400 ring-2 ring-red-400/50 animate-pulse'
+                : 'bg-stone-900 hover:bg-stone-800 text-red-300 border-red-500/40'
+            }`}
+            title="নতুন অর্ডারের জন্য একটানা বাজতে থাকা রিংটোন শুনুন ও বন্ধ করুন"
+          >
+            <BellRing className={`w-3.5 h-3.5 ${isRingtoneActive ? 'animate-bounce text-white' : 'text-red-400'}`} />
+            <span>
+              {isRingtoneActive
+                ? (lang === 'bn' ? '🛑 রিংটোন বন্ধ করুন' : '🛑 Stop Ringtone')
+                : (lang === 'bn' ? '🚨 রিংটোন টেস্ট (লুপ)' : '🚨 Test Ringtone')}
+            </span>
+          </button>
+
           {/* bKash Verified Chime Test Button */}
           <button
             type="button"
@@ -686,21 +802,350 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
 
+      {/* Daily Revenue Goal Progress Section */}
+      <div className="my-6 p-4 sm:p-5 rounded-2xl bg-stone-950/90 border border-stone-800 hover:border-amber-500/40 transition-all shadow-xl relative overflow-hidden backdrop-blur-md">
+        {/* Ambient glow accent */}
+        <div 
+          className={`absolute top-0 right-0 w-80 h-40 rounded-full blur-3xl pointer-events-none -mr-12 -mt-12 transition-opacity ${
+            isGoalAchieved ? 'bg-emerald-500/15' : 'bg-amber-500/10'
+          }`} 
+        />
+
+        {/* Goal Top Header Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-xl border flex items-center justify-center shrink-0 ${
+              isGoalAchieved 
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm shadow-emerald-500/20' 
+                : 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm shadow-amber-500/20'
+            }`}>
+              {isGoalAchieved ? <Trophy className="w-5 h-5 animate-bounce" /> : <Target className="w-5 h-5" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-bold text-white font-serif tracking-wide">
+                  {lang === 'bn' ? 'দৈনিক বিক্রয় লক্ষ্যমাত্রা' : 'Daily Revenue Goal'}
+                </h3>
+                {isGoalAchieved ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    <Sparkles className="w-3 h-3" />
+                    <span>
+                      {lang === 'bn' 
+                        ? `লক্ষ্যমাত্রা অর্জিত! (+৳ ${surplusAmount.toLocaleString()})` 
+                        : `Goal Achieved! (+৳ ${surplusAmount.toLocaleString()})`}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-stone-800 text-stone-300 border border-stone-700">
+                    <span>
+                      {lang === 'bn' 
+                        ? `বাকি ৳ ${remainingToGoal.toLocaleString()}` 
+                        : `Remaining ৳ ${remainingToGoal.toLocaleString()}`}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-stone-400 mt-0.5">
+                {lang === 'bn' 
+                  ? `আজকের মোট বিক্রি ৳ ${totalRevenue.toLocaleString()} (নির্ধারিত লক্ষ্য: ৳ ${dailyRevenueGoal.toLocaleString()})` 
+                  : `Today's Revenue: ৳ ${totalRevenue.toLocaleString()} (Target Goal: ৳ ${dailyRevenueGoal.toLocaleString()})`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+            {/* Weekly Revenue Growth Indicator Badge */}
+            <div 
+              onClick={() => { setActiveTab('stats'); setChartView('weekly_growth'); }}
+              className={`px-3 py-1 rounded-xl text-xs sm:text-sm font-mono font-black border flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 ${
+                isWeeklyGrowthPositive
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 hover:bg-emerald-900/60 shadow-xs shadow-emerald-500/10'
+                  : 'bg-rose-950/80 text-rose-300 border-rose-500/50 hover:bg-rose-900/60 shadow-xs shadow-rose-500/10'
+              }`}
+              title={lang === 'bn' ? 'সাপ্তাহিক প্রবৃদ্ধি চার্ট দেখুন' : 'View Weekly Growth Chart'}
+            >
+              {isWeeklyGrowthPositive ? (
+                <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+              ) : (
+                <ArrowDownRight className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+              )}
+              <span>{isWeeklyGrowthPositive ? `+${weeklyRevenueGrowthPct}%` : `${weeklyRevenueGrowthPct}%`}</span>
+              <span className="text-[10px] font-sans font-normal text-stone-300 hidden sm:inline">
+                {lang === 'bn' ? 'সাপ্তাহিক প্রবৃদ্ধি' : 'WoW Growth'}
+              </span>
+            </div>
+
+            {/* Percentage Badge */}
+            <div className={`px-3 py-1 rounded-xl text-xs sm:text-sm font-mono font-black border flex items-center gap-1.5 ${
+              isGoalAchieved
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                : 'bg-amber-950/80 text-amber-300 border-amber-500/50'
+            }`}>
+              <span>{goalProgressPercent}%</span>
+              <span className="text-[10px] font-sans font-normal text-stone-400">
+                {lang === 'bn' ? 'অর্জিত' : 'reached'}
+              </span>
+            </div>
+
+            {/* Edit Goal Button */}
+            {!isEditingGoal && (
+              <button
+                type="button"
+                onClick={handleStartEditGoal}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-stone-900 hover:bg-stone-800 text-amber-300 border border-stone-700 hover:border-amber-500/50 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                title={lang === 'bn' ? 'দৈনিক লক্ষ্যমাত্রা পরিবর্তন করুন' : 'Edit Target Goal'}
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>{lang === 'bn' ? 'লক্ষ্য সম্পাদনা' : 'Edit Goal'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Main Goal Grid: Radial Gauge Chart on the Left + Analytical Pacing on the Right */}
+        <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-center relative z-10">
+          {/* Radial Gauge Meter Card (lg:col-span-5) */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-center p-4 rounded-xl bg-stone-900/60 border border-stone-800/90 shadow-inner">
+            <div className="flex items-center justify-between w-full mb-1">
+              <span className="text-[11px] font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-amber-400" />
+                <span>{lang === 'bn' ? 'রেডিয়াল গেজ মিটার' : 'Radial Gauge Meter'}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('stats'); setChartView('goal_gauge'); }}
+                className="text-[10px] text-amber-400 hover:text-amber-300 hover:underline font-mono cursor-pointer flex items-center gap-1"
+                title={lang === 'bn' ? 'পূর্ণাঙ্গ গেজ চার্ট দেখুন' : 'View Full Gauge Chart'}
+              >
+                <span>{lang === 'bn' ? 'বড় ভিউ' : 'Expanded View'}</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </button>
+            </div>
+            <DailyRevenueRadialGauge
+              currentRevenue={totalRevenue}
+              targetGoal={dailyRevenueGoal}
+              lang={lang}
+              onEditGoal={!isEditingGoal ? handleStartEditGoal : undefined}
+            />
+          </div>
+
+          {/* Goal Analytics & Trajectory Breakdown (lg:col-span-7) */}
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+            {/* Quick Stat Tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div className="p-3 rounded-xl bg-stone-900/70 border border-stone-800/80">
+                <span className="text-[10px] font-bold text-stone-400 uppercase block">
+                  {lang === 'bn' ? 'আজকের বিক্রয়' : 'Today Sales'}
+                </span>
+                <p className="text-lg font-black text-amber-400 font-mono mt-0.5">
+                  ৳ {totalRevenue.toLocaleString()}
+                </p>
+                <span className="text-[10px] text-stone-400">
+                  {lang === 'bn' ? `${orders.length} টি সফল অর্ডার` : `${orders.length} orders`}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-stone-900/70 border border-stone-800/80">
+                <span className="text-[10px] font-bold text-stone-400 uppercase block">
+                  {lang === 'bn' ? 'দৈনিক লক্ষ্যমাত্রা' : 'Target Goal'}
+                </span>
+                <p className="text-lg font-black text-stone-200 font-mono mt-0.5">
+                  ৳ {dailyRevenueGoal.toLocaleString()}
+                </p>
+                <span className="text-[10px] text-stone-400">
+                  {lang === 'bn' ? 'হোটেল টার্গেট' : 'Hotel target'}
+                </span>
+              </div>
+
+              <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-stone-900/70 border border-stone-800/80">
+                <span className="text-[10px] font-bold text-stone-400 uppercase block">
+                  {isGoalAchieved ? (lang === 'bn' ? 'অতিরিক্ত উদ্বৃত্ত' : 'Goal Surplus') : (lang === 'bn' ? 'টার্গেট বাকি' : 'Gap to Target')}
+                </span>
+                <p className={`text-lg font-black font-mono mt-0.5 ${
+                  isGoalAchieved ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  {isGoalAchieved ? `+৳ ${surplusAmount.toLocaleString()}` : `৳ ${remainingToGoal.toLocaleString()}`}
+                </p>
+                <span className="text-[10px] text-stone-400">
+                  {isGoalAchieved ? (lang === 'bn' ? 'শতকরা ১০০+ অর্জিত' : '100%+ Reached') : (lang === 'bn' ? 'আজকের প্রয়োজনীয়' : 'Needed today')}
+                </span>
+              </div>
+            </div>
+
+            {/* Linear Milestone Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-stone-300 font-semibold flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{lang === 'bn' ? 'লক্ষ্যমাত্রার রৈখিক অগ্রগতি' : 'Linear Goal Progress'}</span>
+                </span>
+                <span className={`font-mono font-bold ${isGoalAchieved ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {goalProgressPercent}% {lang === 'bn' ? 'অর্জিত' : 'reached'}
+                </span>
+              </div>
+
+              <div className="h-3 sm:h-3.5 bg-stone-900/90 rounded-full p-0.5 border border-stone-800 shadow-inner relative overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ease-out relative ${
+                    isGoalAchieved
+                      ? 'bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-400 shadow-md shadow-emerald-500/40'
+                      : 'bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 shadow-md shadow-amber-500/30'
+                  }`}
+                  style={{ width: `${clampedProgressPercent}%` }}
+                >
+                  <div className="absolute inset-0 bg-white/10 opacity-60 bg-[length:20px_20px] bg-[linear-gradient(45deg,rgba(255,255,255,0.12)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.12)_50%,rgba(255,255,255,0.12)_75%,transparent_75%,transparent)]" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-stone-400 font-mono">
+                <span>০% (৳০)</span>
+                <span className="hidden sm:inline">৫০% (৳{Math.round(dailyRevenueGoal * 0.5).toLocaleString()})</span>
+                <span className="font-bold text-amber-300">১০০% (৳{dailyRevenueGoal.toLocaleString()})</span>
+              </div>
+            </div>
+
+            {/* Smart Station Rush Guidance Tip */}
+            <div className="p-3 rounded-xl bg-stone-900/40 border border-stone-800/70 text-xs text-stone-300 flex items-start gap-2.5">
+              <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-bold text-amber-200">
+                  {lang === 'bn' ? 'দৈনিক লক্ষ্য পেসিং গাইডলাইন:' : 'Daily Pacing Guidance:'}
+                </span>
+                <p className="text-[11px] text-stone-400 leading-relaxed">
+                  {isGoalAchieved
+                    ? (lang === 'bn' 
+                        ? `অভিনন্দন! আজকের লক্ষ্যমাত্রা নির্ধারিত সময়ের আগেই ১০০% পূর্ণ হয়েছে। বর্তমান মোট বিক্রয় ৳ ${totalRevenue.toLocaleString()}।` 
+                        : `Congratulations! Today's revenue goal is 100% achieved with total sales of ৳ ${totalRevenue.toLocaleString()}.`)
+                    : (lang === 'bn'
+                        ? `গড় বিল ৳${averageOrderValue} অনুযায়ী লক্ষ্যমাত্রা স্পর্শ করতে আর মাত্র আনুমানিক ${Math.max(Math.ceil(remainingToGoal / Math.max(averageOrderValue, 100)), 1)} টি অর্ডারের প্রয়োজন।`
+                        : `At the average ticket size of ৳${averageOrderValue}, approx ${Math.max(Math.ceil(remainingToGoal / Math.max(averageOrderValue, 100)), 1)} more orders needed to reach the target.`)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Inline Goal Editing Tray */}
+        {isEditingGoal && (
+          <div className="mt-4 pt-4 border-t border-stone-800/80 relative z-10 bg-stone-900/60 p-4 rounded-xl border border-stone-800">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-amber-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{lang === 'bn' ? 'নতুন দৈনিক বিক্রয় লক্ষ্যমাত্রা নির্ধারণ' : 'Set New Daily Revenue Target'}</span>
+                </h4>
+                <p className="text-[11px] text-stone-400 mt-0.5">
+                  {lang === 'bn' 
+                    ? 'আপনার হোটেলের জন্য দৈনিক বিক্রয় টার্গেট লিখুন বা নিচের কুইক বাটনে ক্লিক করুন।' 
+                    : 'Enter target amount or select a quick preset.'}
+                </p>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-stone-400 mr-1 font-sans">{lang === 'bn' ? 'কুইক টার্গেট:' : 'Presets:'}</span>
+                {[5000, 8000, 10000, 15000, 20000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setGoalInputVal(String(preset));
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
+                      goalInputVal === String(preset)
+                        ? 'bg-amber-500 text-stone-950 border-amber-400 shadow-xs'
+                        : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
+                    }`}
+                  >
+                    ৳ {preset.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-mono font-bold text-sm">৳</span>
+                <input
+                  type="number"
+                  min="100"
+                  step="500"
+                  value={goalInputVal}
+                  onChange={(e) => setGoalInputVal(e.target.value)}
+                  placeholder="যেমন: 10000"
+                  className="w-full bg-stone-950 border border-amber-500/50 focus:border-amber-400 rounded-xl pl-8 pr-3 py-2 text-sm text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleSaveGoal()}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-md flex items-center gap-1.5 transition-all cursor-pointer font-sans"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save Target'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelEditGoal}
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition-all cursor-pointer"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+            </div>
+
+            {goalFeedbackMsg && (
+              <p className="text-xs text-amber-400 mt-2 flex items-center gap-1 font-medium">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{goalFeedbackMsg}</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Feedback message when not editing */}
+        {!isEditingGoal && goalFeedbackMsg && (
+          <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1 font-medium relative z-10">
+            <Check className="w-3.5 h-3.5" />
+            <span>{goalFeedbackMsg}</span>
+          </p>
+        )}
+      </div>
+
       {/* Overview Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 my-6">
         <div 
-          onClick={() => { setActiveTab('stats'); setChartView('weekly'); }}
-          className="p-4 rounded-2xl bg-stone-950/80 border border-stone-800 hover:border-amber-500/50 transition-all cursor-pointer group"
+          onClick={() => { setActiveTab('stats'); setChartView('weekly_growth'); }}
+          className="p-4 rounded-2xl bg-stone-950/80 border border-stone-800 hover:border-emerald-500/50 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-bold text-stone-400 uppercase">{lang === 'bn' ? 'আজকের মোট বিক্রি' : 'Total Revenue'}</p>
-            <TrendingUp className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+            {isWeeklyGrowthPositive ? (
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+            ) : (
+              <TrendingDown className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition-transform" />
+            )}
           </div>
-          <p className="text-2xl font-black text-amber-400 mt-1">৳ {totalRevenue}</p>
-          <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 mt-1 font-semibold">
-            <ArrowUpRight className="w-3 h-3" />
-            <span>লাইভ ট্রেন্ড চার্ট দেখুন</span>
-          </span>
+          <p className="text-2xl font-black text-amber-400 mt-1">৳ {totalRevenue.toLocaleString()}</p>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className={`text-[10px] font-mono font-black flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${
+              isWeeklyGrowthPositive 
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+            }`}>
+              {isWeeklyGrowthPositive ? (
+                <ArrowUpRight className="w-3 h-3 shrink-0" />
+              ) : (
+                <ArrowDownRight className="w-3 h-3 shrink-0" />
+              )}
+              <span>{isWeeklyGrowthPositive ? `+${weeklyRevenueGrowthPct}%` : `${weeklyRevenueGrowthPct}%`}</span>
+            </span>
+            <span className="text-[10px] text-stone-400 truncate">
+              {lang === 'bn' ? 'সাপ্তাহিক প্রবৃদ্ধি' : 'vs last week'}
+            </span>
+          </div>
         </div>
 
         <div 
@@ -1125,6 +1570,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       )}
                     </div>
 
+                    {/* Ringing / Pending Confirmation Alert Banner */}
+                    {ord.status === 'pending' && (
+                      <div className="p-3 rounded-xl bg-gradient-to-r from-red-950/90 via-amber-950/70 to-red-950/90 border-2 border-amber-500/70 shadow-lg flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative flex items-center justify-center">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <div className="relative w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center shadow">
+                              <BellRing className="w-4 h-4 animate-bounce" />
+                            </div>
+                          </div>
+                          <div>
+                            <span className="font-black text-amber-200 block text-xs md:text-sm">
+                              {lang === 'bn' ? '🚨 নতুন অর্ডার! হোটেল মালিক কনফার্ম না করা পর্যন্ত রিংটোন বাজছে' : '🚨 New order! Ringtone ringing until hotel owner confirms'}
+                            </span>
+                            <span className="text-[11px] text-stone-300">
+                              {lang === 'bn' ? 'কনফার্ম বাটনে ক্লিক করলে রিংটোন থেমে যাবে এবং কিচেন প্রস্তুত হবে।' : 'Click confirm to stop the continuous ringtone and notify kitchen.'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          id={`quick-confirm-pending-banner-${ord.id}`}
+                          onClick={() => onUpdateOrderStatus(ord.id, 'confirmed')}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-950/50 cursor-pointer active:scale-95 transition-all ring-2 ring-emerald-300"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                          <span>{lang === 'bn' ? '✓ এখনই কনফার্ম করুন (রিংটোন বন্ধ হবে)' : '✓ Confirm Now (Stop Ring)'}</span>
+                        </button>
+                      </div>
+                    )}
+
                     {/* Status Action Buttons */}
                     <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stone-800/80">
                       <div className="flex items-center gap-2 text-xs">
@@ -1136,13 +1612,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             ? 'bg-blue-950 text-blue-300 border border-blue-700/50'
                             : ord.status === 'cooking'
                             ? 'bg-amber-950 text-amber-300 border border-amber-700/50'
-                            : 'bg-stone-900 text-stone-300 border border-stone-700'
+                            : ord.status === 'confirmed'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-500'
+                            : 'bg-red-950 text-red-300 border border-red-500 animate-pulse font-black'
                         }`}>
-                          {ord.status}
+                          {ord.status === 'pending' ? (lang === 'bn' ? '🚨 নতুন (রিংটোন চলছে)' : '🚨 Pending Ring') : ord.status}
                         </span>
                       </div>
 
                       <div className="flex gap-1.5 flex-wrap items-center">
+                        {/* Confirm Order Button */}
+                        <button
+                          id={`confirm-order-status-btn-${ord.id}`}
+                          onClick={() => onUpdateOrderStatus(ord.id, 'confirmed')}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            ord.status === 'confirmed'
+                              ? 'bg-emerald-600 text-white font-black ring-2 ring-emerald-400/40 shadow-xs'
+                              : ord.status === 'pending'
+                              ? 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:to-green-500 text-white font-black ring-2 ring-emerald-300 shadow-md animate-bounce'
+                              : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                          }`}
+                          title="অর্ডার কনফার্ম করুন (রিংটোন বন্ধ হবে)"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{lang === 'bn' ? '✓ কনফার্ম করুন' : '✓ Confirm'}</span>
+                        </button>
+
                         {/* Quick Mark as Cooked Button (Highlighted when Staff Mode is enabled) */}
                         {isStaffMode && (
                           <button
@@ -1226,7 +1721,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {onTestIncomingCall && (
+                <button
+                  type="button"
+                  onClick={onTestIncomingCall}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-stone-950 font-black text-xs flex items-center gap-2 shadow-md cursor-pointer transition-all active:scale-95 border border-emerald-300 animate-pulse"
+                >
+                  <Phone className="w-4 h-4 text-stone-950" />
+                  <span className="text-white">ইনকামিং কল ও রিংটোন টেস্ট</span>
+                </button>
+              )}
+
               {onOpenChat && (
                 <button
                   onClick={onOpenChat}
@@ -1402,6 +1908,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
+      {/* Analytics Dashboard Panel (Daily Sales, Most Ordered Items, Busiest Time Slots) */}
+      {activeTab === 'analytics' && (
+        <AdminAnalyticsPanel
+          orders={orders}
+          foodItems={foodItems}
+          lang={lang}
+        />
+      )}
+
       {/* Sales Stats & Analytics Tab */}
       {activeTab === 'stats' && (
         <div className="space-y-6">
@@ -1425,6 +1940,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Chart View Switcher */}
             <div className="flex flex-wrap items-center gap-1.5 bg-stone-900 p-1.5 rounded-xl border border-stone-800">
+              <button
+                type="button"
+                onClick={() => setChartView('goal_gauge')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  chartView === 'goal_gauge' 
+                    ? 'bg-amber-500 text-stone-950 shadow-xs font-black' 
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>{lang === 'bn' ? 'দৈনিক লক্ষ্যমাত্রা গেজ (Radial Gauge)' : 'Daily Target Gauge (Radial)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setChartView('weekly_growth')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  chartView === 'weekly_growth' 
+                    ? 'bg-emerald-500 text-stone-950 shadow-xs font-black' 
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>{lang === 'bn' ? 'সাপ্তাহিক প্রবৃদ্ধি % ট্রেন্ড (Recharts)' : 'Weekly Growth Rate (% Trend)'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setChartView('revenue_trends')}
@@ -1496,11 +2037,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-4 rounded-2xl bg-stone-950 border border-stone-800">
               <div className="flex items-center justify-between text-stone-400">
-                <span className="text-[11px] font-bold uppercase">{lang === 'bn' ? 'সর্বমোট আয়' : 'Total Revenue'}</span>
+                <span className="text-[11px] font-bold uppercase">{lang === 'bn' ? 'চলতি সপ্তাহের মোট বিক্রি' : 'Weekly Sales Total'}</span>
                 <DollarSign className="w-3.5 h-3.5 text-amber-400" />
               </div>
-              <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">৳ {totalRevenue}</p>
-              <p className="text-[10px] text-stone-500 mt-0.5 font-medium">লাইভ অর্ডার থেকে আপডেটেড</p>
+              <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">৳ {currentWeekTotalRevenue.toLocaleString()}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`text-[11px] font-mono font-black flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${
+                  isWeeklyGrowthPositive 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {isWeeklyGrowthPositive ? (
+                    <ArrowUpRight className="w-3 h-3 shrink-0" />
+                  ) : (
+                    <ArrowDownRight className="w-3 h-3 shrink-0" />
+                  )}
+                  <span>{isWeeklyGrowthPositive ? `+${weeklyRevenueGrowthPct}%` : `${weeklyRevenueGrowthPct}%`}</span>
+                </span>
+                <span className="text-[10px] text-stone-400 truncate">
+                  {lang === 'bn' ? `পূর্বের সপ্তাহ: ৳${previousWeekTotalRevenue.toLocaleString()}` : `Prev: ৳${previousWeekTotalRevenue.toLocaleString()}`}
+                </span>
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-stone-950 border border-stone-800">
@@ -1533,6 +2090,118 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
+          {/* MAIN COMPONENT: Daily Revenue Target Radial Gauge Progress View */}
+          {chartView === 'goal_gauge' && (
+            <div className="p-6 rounded-2xl bg-stone-950 border border-amber-500/30 shadow-2xl space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-800 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-stone-950 uppercase tracking-wide">
+                      {lang === 'bn' ? 'রেডিয়াল গেজ অ্যানালিটিক্স' : 'Radial Gauge Analytics'}
+                    </span>
+                    <h4 className="text-base font-bold text-amber-200 font-serif">
+                      {lang === 'bn' ? 'দৈনিক বিক্রয় লক্ষ্যমাত্রার স্পিডোমিটার গেজ' : 'Daily Revenue Goal Radial Gauge'}
+                    </h4>
+                  </div>
+                  <p className="text-xs text-stone-400 max-w-2xl leading-relaxed">
+                    {lang === 'bn'
+                      ? 'আজকের মোট বিক্রি এবং দৈনিক লক্ষ্যমাত্রার রিয়েল-টাইম দূরত্ব পরিমাপক রেডিয়াল গেজ চার্ট।'
+                      : 'Live visual radial speedometer tracking current sales progress toward today\'s revenue target.'}
+                  </p>
+                </div>
+
+                {!isEditingGoal && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditGoal}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-stone-900 hover:bg-stone-800 text-amber-300 border border-stone-700 hover:border-amber-500/50 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer self-start md:self-auto"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? 'টার্গেট লক্ষ্য পরিবর্তন' : 'Edit Target Goal'}</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-stone-900/50 border border-stone-800/90 shadow-inner">
+                  <DailyRevenueRadialGauge
+                    currentRevenue={totalRevenue}
+                    targetGoal={dailyRevenueGoal}
+                    lang={lang}
+                    onEditGoal={!isEditingGoal ? handleStartEditGoal : undefined}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-stone-900/60 border border-stone-800 space-y-3">
+                    <h5 className="text-xs font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{lang === 'bn' ? 'লক্ষ্য অর্জনের তাৎক্ষণিক অবস্থা' : 'Target Status Breakdown'}</span>
+                    </h5>
+
+                    <div className="grid grid-cols-2 gap-3 font-mono">
+                      <div className="p-2.5 rounded-lg bg-stone-950 border border-stone-800">
+                        <span className="text-[10px] font-sans text-stone-400 block">
+                          {lang === 'bn' ? 'বর্তমান অর্জিত' : 'Achieved so far'}
+                        </span>
+                        <span className="text-base font-bold text-amber-400">৳ {totalRevenue.toLocaleString()}</span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-stone-950 border border-stone-800">
+                        <span className="text-[10px] font-sans text-stone-400 block">
+                          {lang === 'bn' ? 'আজকের লক্ষ্য' : 'Daily Target'}
+                        </span>
+                        <span className="text-base font-bold text-stone-200">৳ {dailyRevenueGoal.toLocaleString()}</span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-stone-950 border border-stone-800">
+                        <span className="text-[10px] font-sans text-stone-400 block">
+                          {lang === 'bn' ? 'অর্জনের হার' : 'Progress Rate'}
+                        </span>
+                        <span className={`text-base font-bold ${isGoalAchieved ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {goalProgressPercent}%
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-stone-950 border border-stone-800">
+                        <span className="text-[10px] font-sans text-stone-400 block">
+                          {isGoalAchieved ? (lang === 'bn' ? 'অতিরিক্ত লাভ' : 'Surplus') : (lang === 'bn' ? 'বাকি ঘাটতি' : 'Remaining')}
+                        </span>
+                        <span className={`text-base font-bold ${isGoalAchieved ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {isGoalAchieved ? `+৳ ${surplusAmount.toLocaleString()}` : `৳ ${remainingToGoal.toLocaleString()}`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-stone-900/40 border border-stone-800 text-xs text-stone-300 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      <span>{lang === 'bn' ? 'মালিকের জন্য স্ট্র্যাটেজিক ইনসাইট:' : 'Hotelier Strategic Insight:'}</span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      {isGoalAchieved
+                        ? (lang === 'bn'
+                            ? `আলহামদুলিল্লাহ! আজকের দৈনিক লক্ষ্যমাত্রা নির্ধারিত সময়ের আগেই ১০০% পূর্ণ হয়েছে। বর্তমান মোট বিক্রয় ৳${totalRevenue.toLocaleString()}। অতিরিক্ত বিক্রয় হোটেলের নিট মার্জিন বাড়াচ্ছে।`
+                            : `Outstanding! Today's revenue goal has been exceeded. Surplus sales directly boost net hotel profitability.`)
+                        : (lang === 'bn'
+                            ? `আজকের লক্ষ্যমাত্রা ছুঁতে গড়ে আরও প্রায় ${Math.max(Math.ceil(remainingToGoal / Math.max(averageOrderValue, 100)), 1)} টি অর্ডারের প্রয়োজন (গড় বিল ৳${averageOrderValue})। স্টেশনের পরবর্তী ট্রেনের যাত্রীদের স্পেশাল মিল ও চা-নাস্তার অফার দিয়ে দ্রুত লক্ষ্য অর্জন করা সম্ভব।`
+                            : `Approximately ${Math.max(Math.ceil(remainingToGoal / Math.max(averageOrderValue, 100)), 1)} more orders are required to hit today's target based on current average ticket size of ৳${averageOrderValue}.`)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MAIN RECHARTS COMPONENT: Weekly Revenue Growth Percentage Trend Line */}
+          {chartView === 'weekly_growth' && (
+            <WeeklyGrowthTrendChart
+              orders={orders}
+              lang={lang}
+            />
+          )}
+
           {/* MAIN RECHARTS COMPONENT: Daily & Monthly Revenue Trends from Completed Orders */}
           {chartView === 'revenue_trends' && (
             <RevenueTrendsChart
@@ -1561,7 +2230,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       : 'Export weekly day-wise revenue, bKash & cash receipts, live customer ledger and menu stock into standard CSV format for business bookkeeping.'}
                   </p>
                   <div className="flex items-center gap-3 text-[11px] text-stone-400 pt-1 flex-wrap">
-                    <span>• ৭ দিনের মোট আয়: <strong className="text-amber-400 font-mono">৳{weeklyTrendData.reduce((s, i) => s + i.revenue, 0).toLocaleString()}</strong></span>
+                    <span>• চলতি ৭ দিনের মোট আয়: <strong className="text-amber-400 font-mono">৳{currentWeekTotalRevenue.toLocaleString()}</strong></span>
+                    <span>• পূর্বের সপ্তাহ: <strong className="text-stone-300 font-mono">৳{previousWeekTotalRevenue.toLocaleString()}</strong></span>
+                    <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full ${
+                      isWeeklyGrowthPositive 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    }`}>
+                      {isWeeklyGrowthPositive ? (
+                        <ArrowUpRight className="w-3 h-3 shrink-0 text-emerald-400" />
+                      ) : (
+                        <ArrowDownRight className="w-3 h-3 shrink-0 text-rose-400" />
+                      )}
+                      <span className="font-mono">{isWeeklyGrowthPositive ? `+${weeklyRevenueGrowthPct}%` : `${weeklyRevenueGrowthPct}%`}</span>
+                      <span>{lang === 'bn' ? 'সাপ্তাহিক প্রবৃদ্ধি' : 'WoW Growth'}</span>
+                    </span>
                     <span>• মোট অর্ডার: <strong className="text-emerald-400 font-mono">{weeklyTrendData.reduce((s, i) => s + i.orders, 0)} টি</strong></span>
                     <span>• বিকাশ/ডিজিটাল: <strong className="text-pink-400 font-mono">৳{weeklyTrendData.reduce((s, i) => s + i.bkash, 0).toLocaleString()}</strong></span>
                     <span>• ক্যাশ কাউন্টার: <strong className="text-stone-200 font-mono">৳{weeklyTrendData.reduce((s, i) => s + i.cash, 0).toLocaleString()}</strong></span>

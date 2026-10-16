@@ -74,6 +74,26 @@ export interface LeaderboardCustomer {
   streakDays?: number;
 }
 
+export interface ItemFeedback {
+  foodId: string;
+  foodNameBn: string;
+  foodNameEn?: string;
+  rating: number; // 1 to 5
+  tags?: string[];
+  note?: string;
+}
+
+export interface MealRating {
+  overallRating: number; // 1 to 5
+  serviceRating?: number; // 1 to 5
+  overallComment?: string;
+  quickTags?: string[];
+  itemFeedbacks: ItemFeedback[];
+  ratedAt: string;
+  customerName?: string;
+  awardedPoints?: number;
+}
+
 export interface Order {
   id: string;
   items: CartItem[];
@@ -97,6 +117,7 @@ export interface Order {
   createdAt: string;
   specialNote?: string;
   estimatedDeliveryMinutes: number;
+  mealRating?: MealRating;
 }
 
 export interface UserProfile {
@@ -138,9 +159,15 @@ export const SUPER_ADMIN_EMAILS = [
   'rubels1k994@gmail.com',
 ];
 
+export const ADMIN_SECURITY_PINS = ['7732', 'fs2217732', '1234'];
+
 export const isUserAdmin = (email?: string | null): boolean => {
   if (!email) return false;
   return SUPER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email.trim().toLowerCase());
+};
+
+export const verifyAdminPin = (pin: string): boolean => {
+  return ADMIN_SECURITY_PINS.includes(pin.trim());
 };
 
 export interface WebRtcCallSession {
@@ -170,6 +197,7 @@ export interface HotelInfo {
   taglineEn: string;
   proprietorBn: string;
   proprietorEn: string;
+  proprietorPhone: string;
   locationBn: string;
   locationEn: string;
   phone1: string;

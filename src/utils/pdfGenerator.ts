@@ -87,13 +87,13 @@ export async function downloadOrderSummaryPdf(order: Order, lang: 'bn' | 'en' = 
             ${HOTEL_INFO.nameEn}
           </p>
           <p style="margin: 4px 0 0 0; font-size: 11px; color: #64748b;">
-            প্রোপাইটার: <strong>${HOTEL_INFO.proprietorBn}</strong> (${HOTEL_INFO.proprietorEn})
+            প্রোপাইটার: <strong>${HOTEL_INFO.proprietorBn}</strong> (${HOTEL_INFO.phone2})
           </p>
           <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">
             📍 ${HOTEL_INFO.locationBn}
           </p>
           <p style="margin: 2px 0 0 0; font-size: 11px; color: #0284c7; font-weight: 600;">
-            📞 ${HOTEL_INFO.phone1} | 📞 ${HOTEL_INFO.phone2} | ✉ ${HOTEL_INFO.email}
+            📞 মালিক: ${HOTEL_INFO.phone2} | হেল্পলাইন ও WhatsApp: ${HOTEL_INFO.phone1} | ✉ ${HOTEL_INFO.email}
           </p>
         </div>
 
@@ -263,7 +263,7 @@ export async function downloadOrderSummaryPdf(order: Order, lang: 'bn' | 'en' = 
             হোটেল আল শেখ ফরিদ — রেলওয়ে স্টেশন সংলগ্ন, জয়পুরহাট
           </p>
           <p style="margin: 2px 0 0 0;">
-            হটলাইন: ${HOTEL_INFO.phone1}, ${HOTEL_INFO.phone2} | ইমেইল: ${HOTEL_INFO.email}
+            মালিক: ${HOTEL_INFO.phone2} | হটলাইন ও WhatsApp: ${HOTEL_INFO.phone1} | ইমেইল: ${HOTEL_INFO.email}
           </p>
           <p style="margin: 2px 0 0 0; color: #94a3b8;">
             এটি একটি কম্পিউটার জেনারেটেড অর্ডার সারাংশ এবং অফিসিয়াল পেমেন্ট ভাউচার।

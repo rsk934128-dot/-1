@@ -39,6 +39,25 @@
         "createdAt": { "type": "string", "description": "ISO timestamp" }
       },
       "required": ["id", "customerName", "customerPhone", "items", "total", "status", "createdAt"]
+    },
+    "CallSession": {
+      "title": "Call Session",
+      "description": "Live audio and video call session between customer and hotel owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Call session unique ID" },
+        "type": { "type": "string", "enum": ["audio", "video"], "description": "Call media type" },
+        "callerName": { "type": "string", "description": "Name of the caller" },
+        "callerPhone": { "type": "string", "description": "Phone number of the caller" },
+        "callerRole": { "type": "string", "enum": ["customer", "admin"], "description": "Caller identity role" },
+        "targetRole": { "type": "string", "enum": ["customer", "admin"], "description": "Call recipient role" },
+        "status": { "type": "string", "enum": ["ringing", "accepted", "declined", "ended"], "description": "Call status" },
+        "startedAt": { "type": "number", "description": "Timestamp in milliseconds" },
+        "initiatorClientId": { "type": "string", "description": "Unique client ID of initiator" },
+        "orderId": { "type": "string", "description": "Associated order ID if any" },
+        "tableNumber": { "type": "string", "description": "Associated table number if any" }
+      },
+      "required": ["id", "type", "callerName", "callerPhone", "callerRole", "targetRole", "status", "startedAt"]
     }
   },
   "firestore": {
@@ -49,6 +68,10 @@
     "/orders/{orderId}": {
       "entity": "Order",
       "description": "All customer food orders"
+    },
+    "/calls/{callId}": {
+      "entity": "CallSession",
+      "description": "Live audio and video call sessions between customer and hotel owner"
     }
   }
 }
